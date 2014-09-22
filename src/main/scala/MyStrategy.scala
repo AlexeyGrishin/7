@@ -75,11 +75,28 @@ final class MyStrategy extends Strategy {
 
   }
 
-  override def move(self: Hockeyist, world: World, game: Game, move: Move) {
+  def measure(name: String)(action: => Unit): Unit = {
+    val start = System.currentTimeMillis()
+    action
+    val diff = System.currentTimeMillis() - start
+    //if (Logger.enabled) println(s"$name took $diff ms")
+  }
+
+  override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = measure("move") {
     //if (self.y == 460) return
-    WorldEx.init(world, game, self)
+
+    WorldEx(world, game, self)
+    Trainer(world, game)
     Logger.doLog(world)
-    //if (self.hokeyistType == HockeyistType.Versatile) {
+    self.role.move(self, world, game, move)
+    /*
+    if (self.hokeyistType != HockeyistType.Versatile) {
+      val cw = Physics.getCollisionWithWall(world.puck, world.puck.velocityVector)
+      if (cw != null) {
+        self.targetPoints = List(cw)
+      }
+      return
+    }
     //if (world.tick < 70) {
     val enemy = world.hockeyists.filter(!_.isOur).filter(_.hokeyistType != Goalie).sortBy(_.distanceTo(world.puck)).head
 
@@ -107,19 +124,21 @@ final class MyStrategy extends Strategy {
 
       }
     }
-    else if (Mover.arriveToZone(self, WorldEx.enemyZone.danger16, move)) {
-      move.action = Strike
+    else if (Mover.arriveToZone(self, WorldEx.enemyZone.defaultDangerZone, move)) {
+      if (move.action != Swing)
+        move.action = Strike
     }
     else {
-      if (enemy.canOwnPuck) {
+      // (enemy.canOwnPuck) {
         //TODO: pass to ally
-        move.action = Strike
-      }
-      else if (move.speedUp == 0 && move.turn == 0) {
+        //move.action = Strike
+      //}
+      //else
+      if (move.speedUp == 0 && move.turn == 0) {
         move.action = Swing
       }
     }
-
+*/
     /*
     1. скорости хокеиста и шайбы складываются. выгоднее лупить по ходу движения. например отрикошетив от борта. иначе - замах. можно рассчитать
           20*power + speed*cos(angle_look - angle_direction)
@@ -130,7 +149,7 @@ final class MyStrategy extends Strategy {
      */
 
   //}
-  if (self.state == Swinging && (move.action != Strike && move.action != Swing && move.action != CancelStrike && move.speedUp != 0)) {
+  if (self.state == Swinging && (!Seq(Strike, Swing, CancelStrike).contains(move.action) || move.speedUp != 0 || move.turn != 0)) {
     move.action = CancelStrike
   }
   //else if (world.tick == 70) {

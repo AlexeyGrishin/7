@@ -4,7 +4,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 
 import Geometry.Point
-import model.ActionType.Pass
+import model.ActionType.{TakePuck, Pass}
 import model.{Puck, Move, Hockeyist, World}
 import WorldEx._
 
@@ -64,7 +64,8 @@ object Logger {
     kls.append(if (isOur) "our_hock" else "enemy_hock")
     kls.append(" ")
     kls.append(hockeyist.state.toString)
-    render("name" -> ((if (isOur) "Our " else "Enemy ") + hockeyist.hokeyistType.toString), first = true)
+    if (hockeyist.inZone) kls.append(" in_zone")
+    render("name" -> ((if (isOur) "Our " else "Enemy ") + hockeyist.hokeyistType.toString + " " + hockeyist.id + " " + hockeyist.statusStr), first = true)
     render("x" -> hockeyist.x)
     render("y" -> hockeyist.y)
     render("vx" -> hockeyist.speedX)
@@ -84,7 +85,28 @@ object Logger {
       addVector("move enemy", hockeyist.moveVector_enemy.dx, hockeyist.moveVector_enemy.dy)
     }
     renderer.write("]")
+    renderer.write(",table: [")
+    renderTable("cooldown", hockeyist.remainingCooldownTicks)
+    renderTable("kickdown", hockeyist.remainingKnockdownTicks)
+    renderTable("anglespeed", hockeyist.angularSpeed)
+    renderTable("angle", hockeyist.angle)
+    renderer.write("[null,null]]")
     renderer.write("\n},")
+    if (hockeyist.move.action == TakePuck) {
+      renderer.write(s"{type: 'circle', name: 'stick radius', radius: ${game.stickLength}, x: ${hockeyist.x}, y: ${hockeyist.y}, klass: 'stick'},")
+    }
+  }
+
+  def renderTable(key: String, value: String): Unit = {
+    renderer.write(s"['$key', '$value'],")
+  }
+
+  def renderTable(key: String, value: Double): Unit = {
+    renderer.write(s"['$key', $value],")
+  }
+
+  def renderTable(key: String, value: Int): Unit = {
+    renderer.write(s"['$key', $value],")
   }
 
   def render(pair: (Any, Any), first: Boolean = false): Unit = {
@@ -130,9 +152,9 @@ object Logger {
     }
 
     render(world.puck)
-    renderer.write("], log: \"\"")
-    for (hock <- world.hockeyists.toList.sortBy(_.hokeyistType.toString)) {
-      if (hock.isOur)
+    renderer.write("], log: \"" + Trainer.gameState.toString + "\\n\\n\" ")
+    for (hock <- world.hockeyists.toList.sortBy(_.id.toString)) {
+      if (hock.isMoveableOur)
         logTurn(hock, hock.move)
     }
     renderer.write("});")
@@ -141,11 +163,11 @@ object Logger {
 
   def renderDangerAreas(): Unit = {
     renderer.write("\n{type: 'area', name: 'danger', klass: 'enemy_danger', points: [")
-    WorldEx.enemyZone.danger16.borderPoints.foreach(p => renderer.write(s"[${p.x}, ${p.y}],"))
+    WorldEx.enemyZone.defaultDangerZone.borderPoints.foreach(p => renderer.write(s"[${p.x}, ${p.y}],"))
     renderer.write("[]]")
     renderer.write("},")
     renderer.write("\n{type: 'area', name: 'danger', klass: 'our_danger', points: [")
-    WorldEx.myZone.danger16.borderPoints.foreach(p => renderer.write(s"[${p.x}, ${p.y}],"))
+    WorldEx.myZone.defaultDangerZone.borderPoints.foreach(p => renderer.write(s"[${p.x}, ${p.y}],"))
     renderer.write("[]]")
     renderer.write("},")
     renderer.write(s"{type:'point', name:'target', 'klass': 'our_target', x:${WorldEx.enemyZone.targetTop.x}, y:${WorldEx.enemyZone.targetTop.y}},")
@@ -155,10 +177,9 @@ object Logger {
     if (!enabled) return
     val tl =
       (f"""
-        | ${hock.hokeyistType}%s
-        |   Turn: ${move.turn}%.2f (${move.turn / Math.PI * 180}%.2f)
-        |   Speedup: ${move.speedUp}%.2f
-        |   Action: ${move.action}%s
+        | ${hock.hokeyistType}%s ${hock.id}%d ${hock.statusStr}%s
+        |   T:${move.turn}%.2f S:${move.speedUp}%.2f A:${move.action}%s
+        |   ${hock.role.name}%s: ${hock.role.lastStatus}%s
       """.stripMargin + (move.action match {
         case Pass =>
           s"""

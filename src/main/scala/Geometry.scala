@@ -56,6 +56,11 @@ object Geometry {
     def isBottom = y >= middleY
     def isTop = y < middleY
 
+    def onOurSide = WorldEx.myZone.half.includes(this)
+    def onEnemySide = WorldEx.enemyZone.half.includes(this)
+
+    def inNet = y >= WorldEx.game.rinkTop && y <= WorldEx.game.rinkBottom && (x <= WorldEx.game.rinkLeft || x >= WorldEx.game.rinkRight)
+
     override def toString = s"($x,$y)"
 
     def ->(p:Point) = new Vector(this, p)
@@ -63,17 +68,34 @@ object Geometry {
 
     def distanceTo(p: Point) = Math.hypot(p.x - x, p.y - y)
 
+
+    def canEqual(other: Any): Boolean = other.isInstanceOf[Point]
+
+    override def equals(other: Any): Boolean = other match {
+      case that: Point =>
+        (that canEqual this) &&
+          x == that.x &&
+          y == that.y
+      case _ => false
+    }
+
+    override def hashCode(): Int = {
+      val state = Seq(x, y)
+      state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
+    }
   }
 
   class Vector(val dx: Double, val dy: Double) {
     def this(from: Point, to: Point) =
      this(to.x - from.x, to.y - from.y)
+
     lazy val length = Math.hypot(dx, dy)
-
     def *(sc: Double) = new Vector(dx*sc, dy*sc)
-    def normal = new Vector(dx/length, dy/length)
 
+    def normal = new Vector(dx/length, dy/length)
     def +(vec: Vector) = new Vector(dx + vec.dx, dy + vec.dy)
+
+    def +(addlen: Double) = apply((length + addlen))
 
     def apply(from: Point) = new Point(from.x + dx, from.y + dy)
 
@@ -81,11 +103,26 @@ object Geometry {
 
     def reverse = new Vector(-dx, -dy)
 
+    def orient(from: Point, to: Point) = if (signum(to.x - from.x) != signum(dx)) reverse else this
+
     def ort = new Vector(dy, -dx)
 
     def /=(coef: Double) = apply(coef / length)
 
     override def toString = f"<$dx%.2f $dy%.2f = $length%.2f>"
+
+    def -(vec: Vector) = this + (vec.reverse)
+
+    def *(vec: Vector) = dx * vec.dx + dy * vec.dy
+
+    def normal_*(vec: Vector) = {
+      val prod = (this*vec)
+      val len = length * vec.length
+      if (prod == 0 || len == 0) 0.0 else prod/len
+    }
+
+    def matchesDx(dx: Double) = signum(this.dx) == signum(dx)
+    def matchesDy(dy: Double) = signum(this.dy) == signum(dy)
   }
 
   trait Zone {
@@ -137,5 +174,12 @@ object Geometry {
   lazy val height = WorldEx.game.worldHeight
   lazy val middleY = (WorldEx.game.rinkBottom + WorldEx.game.rinkTop) / 2
 
+  object Vector {
+    def unapply(v: Vector): Option[(Double, Double)] = Some((v.dx, v.dy))
+  }
 
+  object NullVector extends Vector(0, 0) {
+    def unapply(v: Vector): Boolean = v.dx == 0 && v.dy == 0
+  }
 }
+

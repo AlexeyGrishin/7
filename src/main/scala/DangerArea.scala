@@ -25,10 +25,12 @@ object DangerArea {
     val puckR = world.puck.radius
     val goalV = game.goalieMaxSpeed
 
-    val endX = game.worldWidth * 3 / 2
-    val endY = game.rinkBottom
+    val endX = game.worldWidth
+    val endY = game.rinkBottom - game.puckBindingRange
 
-    val targetX = xnet
+    val puckKeeperDistance = game.puckBindingRange
+
+    val targetX = xnet - gap
     val targetY = ynet + puckR + gap
 
     def isDanger(x: Double, y: Double):Boolean = {
@@ -51,9 +53,16 @@ object DangerArea {
       puck_bottom <= goalie_top
     }
 
+    val target = new Point(targetX, targetY)
+
     for (x <- (xnet + goalR*2) to (endX, step)) {
-      for (y <- ynet to (endY, step)) {
-        if (isDanger(x, y)) points += new Point(x,y)
+      for (y <- (ynet + netH) to (endY, step)) {
+        if (isDanger(x, y)) {
+          val vecFromTarget = (target -> new Point(x,y)) + puckKeeperDistance
+          val src = target -> vecFromTarget
+          val adjusted = new Point(src.x /*(src.x / step).toLong * step*/, (src.y / step).toLong * step)
+          points += adjusted
+        }
       }
     }
 

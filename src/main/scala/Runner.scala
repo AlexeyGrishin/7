@@ -47,6 +47,9 @@ final class Runner(args: Array[String]) {
 object Runner {
   def main(args: Array[String]): Unit = {
     Logger.enabled = true
+    if (args.length == 1) {
+      Logger.name = args(0)
+    }
     Thread.sleep(500)
     val params =
       if (args.length == 3) { args }
@@ -55,7 +58,12 @@ object Runner {
       new Runner(params).run()
     }
     finally {
-      Logger.close()
+      try {
+        Logger.close()
+      }
+      catch {
+        case e: Throwable => e.printStackTrace()
+      }
     }
   }
 }

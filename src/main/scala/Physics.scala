@@ -1,6 +1,8 @@
 import WorldEx._
 import Geometry.Point
+import Geometry.Vector
 import model.Hockeyist
+import model.{Unit => ModelUnit}
 import StrictMath._
 
 object Physics {
@@ -41,20 +43,122 @@ object Physics {
     Math.ceil(Math.abs(turnFor) / hock.realTurnspeed)
   }
 
-  val Kh = 1.0 - 1.0 / 50
-  val lnKh = log(Kh)
-  val Kp = 1.0 - 1.0 / 1000
-
   def integ(to: Double, ifn: (Double) => Double) = ifn(to) - ifn(0)
+  def integ(to: Double, from: Double, ifn: (Double) => Double) = ifn(to) - ifn(from)
 
-  def targetAfter(hock: Hockeyist, time: Long, acceleration: Double = 0) = {
+  def timeToArrival(hock: ModelUnit, target: Point, estimate: Long, acceleration: Double = 0) = {
+    //very slow...
+    val calculate = targetAfterCalculator(hock, acceleration)
+    val baseEst = estimate - 5
+    val base = calculate(0, baseEst)
+    (1 to 10)
+      .map(d => (baseEst + d, calculate(0, baseEst + d)))
+      .map(p => (p._1, target.distanceTo(p._2)))
+      .sortBy(f=>f._2).head._1
+  }
+
+  def targetAfterCalculator(hock: ModelUnit, acceleration: Double = 0, analyzeColision: Boolean = false) = {
     val v0 = hock.velocity
-    val distanceWoAcceleration = integ(time, v0*pow(Kh,_)/lnKh)
+    val k = hock.brakeK
+    val logk = hock.logBrakeK
     val fullAccel = hock.realSpeedup() * acceleration
-    val accelDistance = if (acceleration == 0) 0 else {
-      integ(time, t => fullAccel / Kh / lnKh * (pow(Kh, t) / lnKh - t))
+    (timeFrom: Long, timeTo: Long) => {
+      val distanceWoAcceleration = integ(timeTo, timeFrom, v0*pow(k,_)/logk)
+      val accelDistance = if (fullAccel == 0) 0 else {
+        integ(timeTo, timeFrom, t => fullAccel / k / logk * (pow(k, t) / logk - t))
+      }
+      val totalDistance = distanceWoAcceleration + accelDistance
+      val targetPoint = unit2velocityVector(hock)(totalDistance)(hock)
+      if (analyzeColision) {
+        val cw = getCollisionWithWall(hock, hock.velocityVector)
+        //very rude analysis
+        if (cw != null && (cw.distanceTo(hock.point) < totalDistance)) {
+          val restOfDistance = totalDistance - cw.distanceTo(hock.point)
+          val mirrored = mirrorAt(hock.velocityVector, cw)(restOfDistance / 4)
+          mirrored(cw)
+        }
+        else {
+          targetPoint
+        }
+      }
+      else {
+        targetPoint
+      }
     }
-    unit2velocityVector(hock)(distanceWoAcceleration + accelDistance)(hock)
+  }
+
+  def targetAfter(hock: ModelUnit, time: Long, acceleration: Double = 0) = {
+    targetAfterCalculator(hock, acceleration, analyzeColision = true)(0, time)
+    /*val v0 = hock.velocity
+    val k = hock.brakeK
+    val logk = hock.logBrakeK
+    val distanceWoAcceleration = integ(time, v0*pow(k,_)/logk)
+    val fullAccel = hock.realSpeedup() * acceleration
+    val accelDistance = if (fullAccel == 0) 0 else {
+      integ(time, t => fullAccel / k / logk * (pow(k, t) / logk - t))
+    }
+    val totalDistance = distanceWoAcceleration + accelDistance
+    val targetPoint = unit2velocityVector(hock)(totalDistance)(hock)
+    val cw = getCollisionWithWall(hock, hock.velocityVector)
+    //very rude analysis
+    if (cw != null && (cw.distanceTo(hock.point) < totalDistance)) {
+      val restOfDistance = totalDistance - cw.distanceTo(hock.point)
+      val mirrored = mirrorAt(hock.velocityVector, cw)(restOfDistance / 4)
+      mirrored(cw)
+    }
+    else {
+      targetPoint
+    }*/
+  }
+
+  lazy val g = WorldEx.game
+
+  def mirrorAt(v: Geometry.Vector, p: Point) = {
+    if (p.x == g.rinkLeft || p.x == g.rinkRight) {
+      new Vector(-v.dx, v.dy)
+    }
+    else {
+      new Vector(v.dx, -v.dy)
+    }
+
+  }
+
+  def inRink(point: Point) = {
+    point.x >= g.rinkLeft && point.x <= g.rinkRight && point.y >= g.rinkTop && point.y <= g.rinkBottom
+  }
+
+  //TODO: с помощью этой же функции "наводиться" на ворота
+
+  def getCollisionWithWall(origin: Point, vector: Geometry.Vector): Point = {
+    if (vector.length == 0) return null
+    var xtop: Double = 0
+    var xbottom: Double = 0
+    var yleft: Double = 0
+    var yright: Double = 0
+    if (vector.dx != 0) {
+      val vk = vector.dy / vector.dx
+      xbottom = origin.x + (g.rinkBottom - origin.y) / vk
+      xtop = origin.x + (g.rinkTop - origin.y) / vk
+    }
+    else {
+      xbottom = origin.x
+      xtop = origin.x
+    }
+    if (inRink(new Point(xbottom, g.rinkBottom)) && vector.matchesDx(xbottom - origin.x)) return new Point(xbottom, g.rinkBottom )
+    if (inRink(new Point(xtop, g.rinkTop)) && vector.matchesDx(xtop - origin.x)) return new Point(xtop, g.rinkTop )
+
+    if (vector.dy != 0) {
+      val vk = vector.dx / vector.dy
+      yleft = origin.y + (g.rinkLeft - origin.x) / vk
+      yright = origin.y + (g.rinkRight - origin.x) / vk
+    }
+    else {
+      yleft = origin.y
+      yright = origin.y
+    }
+    if (inRink(new Point(g.rinkLeft, yleft)) && vector.matchesDy(yleft - origin.y)) return new Point(g.rinkLeft, yleft )
+    if (inRink(new Point(g.rinkRight, yright)) && vector.matchesDy(yright - origin.y)) return new Point(g.rinkRight, yright )
+    null
   }
 
 
