@@ -6,16 +6,16 @@ object Trainer {
   val Enemy = -1
   val Noone = 0
   val We = 1
-  case class GameState(puckOwner: Int, overtime: Boolean)
+  case class GameState(puckOwner: Int, overtime: Boolean, justMissedOrScored: Boolean)
 
-  var gameState: GameState = new GameState(-2, false)
+  var gameState: GameState = new GameState(-2, false, false)
 
   def getGameState(world: World, game: Game) = {
     GameState(world.puck.ownerPlayerId match {
       case None => Noone
       case Some(id) if id == world.myPlayer.get.id => We
       case _ => Enemy
-    }, world.tick > game.tickCount - 300 && (world.players.map(_.goalCount).max == 0))
+    }, world.tick > game.tickCount - 300 && (world.players.map(_.goalCount).max == 0), world.myPlayer.get.justMissedGoal || world.myPlayer.get.justScoredGoal)
   }
 
   lazy val totalCount = WorldEx.world.hockeyists.count(_.isOur) - 1 //goalie
@@ -33,22 +33,26 @@ object Trainer {
     val List(withPuck, withoutPuck) = our.sortBy(h => if (h.ownPuck) 1 else 2)
     val List(nearToNet, farFromNet) = our.sortBy(h => h.distanceTo(WorldEx.myZone.net.middle))
     gameState match {
-      case GameState(We, true) =>
+      case GameState(_, _, true) =>
+        our.foreach(_.role = KickAsses)
+      case GameState(We, true, _) =>
         withPuck.role = Roles.StrikeToNet
         withoutPuck.role = Roles.KickAsses
-      case GameState(Enemy, true) =>
+      case GameState(Enemy, true, _) =>
         nearToNet.role = Roles.DoDefence
         farFromNet.role = Roles.LookupForPuck
-      case GameState(We, _) =>
+      case GameState(We, _, _) =>
         if (withPuck.role != Roles.DoDefence) {
           withPuck.role = Roles.MakeGoalAlone
           if (world.puck.onEnemySide)
             withoutPuck.role = Roles.KickAsses
+          else
+            withoutPuck.role = Roles.DoDefence
         }
-      case GameState(Enemy, _) =>
+      case GameState(Enemy, _, _) =>
         nearToNet.role = Roles.DoDefence
         farFromNet.role = Roles.LookupForPuck
-      case GameState(Noone, _) =>
+      case GameState(Noone, _, _) =>
         nearToNet.role = Roles.DoDefence
         farFromNet.role = Roles.LookupForPuck
     }
@@ -71,23 +75,23 @@ object Trainer {
     val withPuck = world.hockeyists.find(h => h.isOur && h.ownPuck)
     val withoutPuck = world.hockeyists.filter(h => h.isOur && !h.ownPuck)
     gameState match {
-      case GameState(We, true) =>
+      case GameState(We, true, _) =>
         withPuck.get.role = Roles.StrikeToNet
         withoutPuck.foreach(_.role = Roles.KickAsses)
-      case GameState(Enemy, true) =>
+      case GameState(Enemy, true, _) =>
         attacker.role = Roles.LookupForPuck
         helper.role = Roles.KickAsses
         defencer.role = Roles.DoDefence
-      case GameState(We, _) =>
+      case GameState(We, _, _) =>
         if (withPuck.get != defencer)
           withPuck.get.role = Roles.MakeGoalAlone
         withoutPuck.foreach(_.role = Roles.KickAsses)
         defencer.role = Roles.DoDefence
-      case GameState(Enemy, _) =>
+      case GameState(Enemy, _, _) =>
         attacker.role = Roles.LookupForPuck
         helper.role = Roles.KickAsses
         defencer.role = Roles.DoDefence
-      case GameState(Noone, _) =>
+      case GameState(Noone, _, _) =>
         attacker.role = Roles.LookupForPuck
         helper.role = Roles.KickAsses
         defencer.role = Roles.KickAsses

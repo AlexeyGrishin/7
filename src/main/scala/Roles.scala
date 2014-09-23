@@ -80,14 +80,16 @@ object Roles {
         }
         else {
           val nearestZonePoint = WorldEx.myZone.danger20.borderPoints.sortBy(_.distanceTo(enemy)).head
-          //TODO[bug]: когда враг уже на нашей половине, то уже поздно. я бы брал 3/4
-          val goingThere = enemy.velocity > 0 && enemy.point.onOurSide && StrictMath.signum(enemy.velocityVector.dx) == WorldEx.myZone.dx
+          //TODO[fixed]: когда враг уже на нашей половине, то уже поздно. я бы брал 3/4
+          val goingThere = enemy.velocity > 0 /*&& enemy.point.onOurSide*/ && StrictMath.signum(enemy.velocityVector.dx) == WorldEx.myZone.dx
           if (goingThere) {
             lastStatus += "enemy is going here"
+            //TODO[bug]: учитывать во всех случаях направление. если я смотрю не в сторону ворот, то время будет гораздо больше. в лоб решение не катит - идет назад, поворот не нужен
             val timeToZone = Physics.timeToArrival(enemy, nearestZonePoint, (nearestZonePoint.distanceTo(enemy) / enemy.velocity).toInt)
+            //val timeToTurn = Physics.ticksForTurn(self, self.angleTo(self.point, net.middle))
             val timeToNet = Physics.timeToArrival(self, net.middle, (net.middle.distanceTo(self) / self.velocity).toInt)
 
-            if (timeToZone > timeToNet) {
+            if (timeToZone > timeToNet/* || self.onOurSide*/) {//TODO: onOurSide?
               lastStatus += "\n continue going to net"
             }
             else {
@@ -106,7 +108,7 @@ object Roles {
         }
       }
       //TODO: for puck velocity vector == owner's lookvector
-      val movingTarget = Physics.targetAfter(enemyWithPuck.getOrElse(world.puck), 40)
+      val movingTarget = world.puck//TODO: Physics.targetAfter(enemyWithPuck.getOrElse(world.puck), 40)
       lastStatus += "\n"
 
       if (net.includes(self)) {
@@ -197,8 +199,14 @@ object Roles {
 
   object MakeGoalAlone extends Role {
     override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
-      assert(self.ownPuck)  //TODO[bug] убрать, предусмотреть
       lastStatus = ""
+      if (!self.ownPuck)  //TODO[fixed] убрать, предусмотреть
+      {
+        lastStatus += "puck is not mine O_o\n"
+        LookupForPuck.move(self, world, game, move)
+        lastStatus += LookupForPuck.lastStatus
+        return
+      }
       if (Mover.arriveToZone(self, WorldEx.enemyZone.defaultDangerZone, move, s => lastStatus += s + "\n")) {
         lastStatus += "done, ready to strike"
         move.action = Strike

@@ -45,8 +45,8 @@ class HockeystEx(var hockeyist: Hockeyist) {
 
   val isMoveableOur = hockeyist.playerId == world.myPlayer.get.id && hockeyist.hokeyistType != Goalie && hockeyist.state != Resting
 
-  //TODO[bug]: не учитывать валяющихся врагов при выборе цели
-  val isMoveableEnemy = hockeyist.playerId == world.opponentPlayer.get.id && hockeyist.hokeyistType != Goalie && hockeyist.state != Resting
+  //TODO[fixed]: не учитывать валяющихся врагов при выборе цели
+  val isMoveableEnemy = hockeyist.playerId == world.opponentPlayer.get.id && hockeyist.hokeyistType != Goalie && hockeyist.state != Resting && hockeyist.state != KnockedDown
 
   def realSpeedup(backward: Boolean = false) = if (backward) game.hockeyistSpeedDownFactor else game.hockeyistSpeedUpFactor //TODO: calculate with stamina/agility
   def realTurnspeed = game.hockeyistTurnAngleFactor

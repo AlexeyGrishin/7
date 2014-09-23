@@ -30,7 +30,7 @@ object Mover {
   }
 
   def arriveFor(me: Hockeyist, unit: ModelUnit, move: Move, limit: Double = game.stickLength): Unit = {
-    val estimatedPoint = estimatedRandevousPoint(me, unit)//TODO[bug]: limit забыл передавать!!!
+    val estimatedPoint = estimatedRandevousPoint(me, unit, limit)//TODO[fixed]: limit забыл передавать!!!
     me.targetPoints = List(estimatedPoint)
     me.moveVector_target = unit2point(me) -> estimatedPoint
     me.moveVector_enemy = new Vector(0,0)
@@ -60,7 +60,7 @@ object Mover {
 
       if (me.passFrom == null) {
         findFirstPointInZone(me, new Zone {
-          override def includes(p: Point): Boolean = zone.middle.distanceTo(p) <= me.radius
+          override def includes(p: Point): Boolean = zone.closerToNetPoint.distanceTo(p) <= me.radius
         },  p => me.targetPoints = p :: me.targetPoints ) match {
           case Some((point, time)) =>
             val targetVelocity = Physics.velocityAfter(me, time)
@@ -145,14 +145,17 @@ object Mover {
         me.passTo = if (passFrom.isTop) WorldEx.enemyZone.targetBottom else WorldEx.enemyZone.targetTop
       //}
       if (me.state != Swinging) {
-        if (doTurn(me, me.passTo, move, passFrom))
+        if (doTurn(me, me.passTo, move, passFrom)) {
           addStatus("doTurn2")
           return false
+        }
       }
       val ticksRemaining = me.passFromArrival - world.tick
       val needSwing = WorldEx.enemyZone.needSwingWhenStrikeFrom(passFrom)
       if (needSwing && ticksRemaining > 0 && me.swingTicks < game.maxEffectiveSwingTicks) {
         move.action = Swing
+        addStatus("doSwing2")
+        return false
       }
       else {
         move.action = ActionType.None

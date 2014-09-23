@@ -137,6 +137,11 @@ object Geometry {
     }
     val cornerPoints = List(p1, p2, new Point(p1.x, p2.y), new Point(p2.x, p1.y))
     val middle = new Point((p1.x + p2.x)/2, (p1.y + p2.y)/2)
+    val closerToNetPoint = new Point(if (p1.x < middleX) p1.x else p2.x, middle.y)
+
+    val middleZone = new Zone {
+      override def includes(p: Point): Boolean = middle.distanceTo(p) <= 30
+    }
   }
 
   class PointSpecZone(points: Traversable[Point]) extends Zone {
@@ -159,7 +164,8 @@ object Geometry {
     }
 
     def nearestTo(p: Point): Traversable[Point] = {
-      val t = if (p.distanceTo(borderPointsPerY.head._1) > p.distanceTo(borderPointsPerY.head._2)) borderPointsPerY.map(_._1) else borderPointsPerY.map(_._2)
+      //TODO[fixed]: nearest
+      val t = if (p.distanceTo(borderPointsPerY.head._1) < p.distanceTo(borderPointsPerY.head._2)) borderPointsPerY.map(_._1) else borderPointsPerY.map(_._2)
       //t.filter(p => p.y == topY || p.y == bottomY)
       t
     }

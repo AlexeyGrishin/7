@@ -56,8 +56,8 @@ object WorldEx {
     new PointSpecZone(dangerLeft15),
     DangerArea.targetPoint(world, game).toLeft,
     new Rectangle(
-      new Point(game.rinkLeft + goalieR*2.5, game.goalNetTop + game.goalNetHeight/2 - goalieR/2),
-      new Point(game.rinkLeft + goalieR*3.5, game.goalNetTop + game.goalNetHeight/2 + goalieR/2)  //TODO[bug]: shall use same consts as for right side!
+      new Point(game.rinkLeft + goalieR*2.5, game.goalNetTop + game.goalNetHeight/2 - goalieR*2),
+      new Point(game.rinkLeft + goalieR*4.5, game.goalNetTop + game.goalNetHeight/2 + goalieR*2)  //TODO[fixed]: shall use same consts as for right side!
     )
   )
 
