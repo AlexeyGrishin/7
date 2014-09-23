@@ -118,7 +118,7 @@ object Mover {
     None
   }
 
-  def doTurn(me: Hockeyist, target: Point, move: Move, from: Point = null, ticksLeft: Int = 0): Boolean = {
+  def doTurn(me: Hockeyist, target: Point, move: Move, from: Point = null, ticksLeft: Int = 1): Boolean = {
     val angleAdjustement = Physics.angleAfter(me.angularSpeed, ticksLeft)
     //if (ticksLeft != 0) println(me.angularSpeed, ticksLeft, angleAdjustement)
     val angleTo = me.angleTo(Option(from).getOrElse(me.point), target) - angleAdjustement

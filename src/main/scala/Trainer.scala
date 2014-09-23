@@ -1,5 +1,5 @@
 import Roles._
-import model.{HockeyistType, World, Game}
+import model.{Hockeyist, HockeyistType, World, Game}
 import WorldEx._
 
 object Trainer {
@@ -18,12 +18,13 @@ object Trainer {
     }, world.tick > game.tickCount - 300 && (world.players.map(_.goalCount).max == 0))
   }
 
-  lazy val totalCount = WorldEx.world.hockeyists.count(_.isMoveableOur)
+  lazy val totalCount = WorldEx.world.hockeyists.count(_.isOur) - 1 //goalie
 
   def reassignRoles(world: World, game: Game): Unit = {
     totalCount match {
       case 2 => reassignRoles2(world, game)
-      case _ => reassignRoles3(world, game)
+      case 3 => reassignRoles3(world, game)
+      case 6 => reassignRoles6(world, game)
     }
   }
 
@@ -53,12 +54,22 @@ object Trainer {
     }
   }
 
+  def reassignRoles6(world: World, game: Game): Unit = {
+    val all = world.hockeyists.filter(h => h.isMoveableOur).toList
+    val List(attacker, defencer, helper) = all
+    reassignRoles36(world, game, attacker, defencer, helper)
+  }
+
   def reassignRoles3(world: World, game: Game): Unit = {
     val attacker = world.hockeyists.find(h => h.isOur && h.hokeyistType == HockeyistType.Forward).get
     val defencer = world.hockeyists.find(h => h.isOur && h.hokeyistType == HockeyistType.Defenceman).get
     val helper = world.hockeyists.find(h => h.isOur && h.hokeyistType == HockeyistType.Versatile).get
+    reassignRoles36(world, game, attacker, defencer, helper)
+  }
+
+  def reassignRoles36(world: World, game: Game, attacker: Hockeyist, defencer: Hockeyist, helper: Hockeyist): Unit = {
     val withPuck = world.hockeyists.find(h => h.isOur && h.ownPuck)
-    val withoutPuck = world.hockeyists.find(h => h.isOur && !h.ownPuck)
+    val withoutPuck = world.hockeyists.filter(h => h.isOur && !h.ownPuck)
     gameState match {
       case GameState(We, true) =>
         withPuck.get.role = Roles.StrikeToNet

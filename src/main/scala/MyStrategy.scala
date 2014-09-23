@@ -1,5 +1,5 @@
 import model.ActionType.{CancelStrike, Swing, Strike, TakePuck}
-import model.HockeyistState.Swinging
+import model.HockeyistState.{Active, Resting, Swinging}
 import model.HockeyistType.Goalie
 import model.{Unit => ModelUnit, _}
 
@@ -20,7 +20,8 @@ final class MyStrategy extends Strategy {
     WorldEx(world, game, self)
     Trainer(world, game)
     Logger.doLog(world)
-    self.role.move(self, world, game, move)
+    if (self.state != Resting)
+      self.role.move(self, world, game, move)
 
     /*
     1. скорости хокеиста и шайбы складываются. выгоднее лупить по ходу движения. например отрикошетив от борта. иначе - замах. можно рассчитать
@@ -29,7 +30,7 @@ final class MyStrategy extends Strategy {
      */
 
   //}
-  if (self.state == Swinging && (!Seq(Strike, Swing, CancelStrike).contains(move.action) || move.speedUp != 0 || move.turn != 0)) {
+  if (self.state == Swinging && (!Seq(Strike, Swing, CancelStrike, ActionType.None).contains(move.action) || move.speedUp != 0 || move.turn != 0)) {
     move.action = CancelStrike
   }
 

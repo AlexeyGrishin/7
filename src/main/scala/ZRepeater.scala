@@ -14,6 +14,7 @@ object ZRepeater extends App {
     var url = args(0)
 
     def tokenByUrl(url: String): Option[String] = {
+      if (!url.startsWith("http")) return Some(url)
       val connection = new URL(url).openConnection().asInstanceOf[HttpURLConnection]
       connection.setRequestProperty("Cookie", cookie)
       val br = new BufferedReader(new InputStreamReader(connection.getInputStream, "UTF-8"))
