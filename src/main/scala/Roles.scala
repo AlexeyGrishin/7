@@ -65,7 +65,7 @@ object Roles {
             lastStatus += "\ngo to it"
             self.passFrom = null //TODO: иначе arriveForNet может продолжать думать будто мы все еще идем к точке
             //TODO: если идет сквозь меня - просто развернуться
-            Mover.arriveFor(self, world.puck, move)
+            Mover.arriveFor(self, world.puck, move, limit = 3*game.stickLength)
             return
           }
           else {
@@ -104,6 +104,7 @@ object Roles {
           }
         }
       }
+      //TODO: for puck velocity vector == owner's lookvector
       val movingTarget = Physics.targetAfter(enemyWithPuck.getOrElse(world.puck), 40)
       lastStatus += "\n"
 

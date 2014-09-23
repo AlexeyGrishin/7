@@ -31,7 +31,7 @@ object ZRepeater extends App {
     tokenByUrl(url) match {
       case Some(token) => {
         println(s"token is $token")
-        val p = s"repeater.bat $token".run()
+        val p = s"java -jar repeater/repeater.jar $token".run()
         Runner.main(Array(token))
         p.destroy()
         System.exit(0)

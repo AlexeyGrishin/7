@@ -27,7 +27,7 @@ object Mover {
       }
   }
 
-  def arriveFor(me: Hockeyist, unit: ModelUnit, move: Move): Unit = {
+  def arriveFor(me: Hockeyist, unit: ModelUnit, move: Move, limit: Double = game.stickLength): Unit = {
     val estimatedPoint = estimatedRandevousPoint(me, unit)
     me.targetPoints = List(estimatedPoint)
     me.moveVector_target = unit2point(me) -> estimatedPoint
