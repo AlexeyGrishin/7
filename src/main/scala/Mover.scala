@@ -20,6 +20,8 @@ object Mover {
         val coef = me.velocityVector normal_* unit.velocityVector
         val distanceToReac = dist * 0.5 * (2 + coef)
         val estimatedTime = Math.min(200, distanceToReac / unit.velocity)
+        //TODO[bug]: когда гонимся за другим хокеистом - стоит учитывать ускорение
+        //TODO[bug]: и учитывать куда он смотрит. можно было развернуться раньше и перехватить 14401191e3431322f95f015dcc230776d66ccfeb 4877
         Physics.targetAfter(unit, estimatedTime.toLong)
       }
       else {
@@ -28,7 +30,7 @@ object Mover {
   }
 
   def arriveFor(me: Hockeyist, unit: ModelUnit, move: Move, limit: Double = game.stickLength): Unit = {
-    val estimatedPoint = estimatedRandevousPoint(me, unit)
+    val estimatedPoint = estimatedRandevousPoint(me, unit)//TODO[bug]: limit забыл передавать!!!
     me.targetPoints = List(estimatedPoint)
     me.moveVector_target = unit2point(me) -> estimatedPoint
     me.moveVector_enemy = new Vector(0,0)
@@ -261,7 +263,7 @@ object Mover {
     val product = me.lookVector normal_* vector
     move.speedUp = if (forceSpeeddown) -0.01 else product * 1.1
     move.turn = me.angleTo(tp.x, tp.y)
-    //TODO: try other strategies
+    //TODO[bug]: 14401191e3431322f95f015dcc230776d66ccfeb 4382 правильнее было бы затормозить. но произведение векторов положительное
   }
 
 }

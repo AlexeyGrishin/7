@@ -42,7 +42,9 @@ object Logger {
     renderer.write("\n,vectors: [")
     addVector("vel", puck.speedX, puck.speedY, first = true)
     renderer.write("]")
-
+    renderer.write(",table: [")
+    renderTable("angle", puck.velocityVector.normal.toString)
+    renderer.write("[null,null]]")
     renderer.write("\n}")
   }
 

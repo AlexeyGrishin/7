@@ -42,8 +42,10 @@ class HockeystEx(var hockeyist: Hockeyist) {
   }
 
   val isOur = hockeyist.playerId == world.myPlayer.get.id
+
   val isMoveableOur = hockeyist.playerId == world.myPlayer.get.id && hockeyist.hokeyistType != Goalie && hockeyist.state != Resting
 
+  //TODO[bug]: не учитывать валяющихся врагов при выборе цели
   val isMoveableEnemy = hockeyist.playerId == world.opponentPlayer.get.id && hockeyist.hokeyistType != Goalie && hockeyist.state != Resting
 
   def realSpeedup(backward: Boolean = false) = if (backward) game.hockeyistSpeedDownFactor else game.hockeyistSpeedUpFactor //TODO: calculate with stamina/agility
@@ -85,12 +87,12 @@ class HockeystEx(var hockeyist: Hockeyist) {
     val cright = if (move.turn > 0) ">" else " "
     val fwd = if (move.speedUp > 0) "^" else if (move.speedUp < 0) "v" else " "
     val status = (hockeyist.state, move.action, hockeyist.remainingCooldownTicks) match {
-      case (_, ActionType.None, cd) if cd > 0 => "-_-"
       case (KnockedDown, _, _) => ">_&lt;"
+      case (_, ActionType.None, cd) if cd > 0 => "-_-"
+      case (_, Strike, _) => "@_@"
       case (Swinging, _, _) => "/_/"
       case (_, Swing, _) => "/_/"
       case (_, TakePuck, _) => "^_^"
-      case (_, Strike, _) => "@_@"
       case (_, Pass, _) => ">_>"
       case _ => "o_o"
     }

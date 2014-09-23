@@ -80,6 +80,7 @@ object Roles {
         }
         else {
           val nearestZonePoint = WorldEx.myZone.danger20.borderPoints.sortBy(_.distanceTo(enemy)).head
+          //TODO[bug]: когда враг уже на нашей половине, то уже поздно. я бы брал 3/4
           val goingThere = enemy.velocity > 0 && enemy.point.onOurSide && StrictMath.signum(enemy.velocityVector.dx) == WorldEx.myZone.dx
           if (goingThere) {
             lastStatus += "enemy is going here"
@@ -196,7 +197,7 @@ object Roles {
 
   object MakeGoalAlone extends Role {
     override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
-      assert(self.ownPuck)
+      assert(self.ownPuck)  //TODO[bug] убрать, предусмотреть
       lastStatus = ""
       if (Mover.arriveToZone(self, WorldEx.enemyZone.defaultDangerZone, move, s => lastStatus += s + "\n")) {
         lastStatus += "done, ready to strike"
