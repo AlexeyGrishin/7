@@ -57,6 +57,17 @@ object Physics {
       .sortBy(f=>f._2).head._1
   }
 
+  val angularSpeedK = 0.97
+  val logAngularSpeedK = log(angularSpeedK)
+
+  def angularSpeedAfter(as: Double, time: Long) = as * pow(angularSpeedK, time)
+
+  def angleAfter(as: Double, time: Long) = integ(0, time, as * pow(angularSpeedK, _) / logAngularSpeedK)
+
+  def velocityAfter(hock: ModelUnit, time: Long, acceleration: Double = 0) = {
+    hock.velocity * pow(hock.brakeK, time) + acceleration*time
+  }
+
   def targetAfterCalculator(hock: ModelUnit, acceleration: Double = 0, analyzeColision: Boolean = false) = {
     val v0 = hock.velocity
     val k = hock.brakeK
@@ -126,8 +137,6 @@ object Physics {
   def inRink(point: Point) = {
     point.x >= g.rinkLeft && point.x <= g.rinkRight && point.y >= g.rinkTop && point.y <= g.rinkBottom
   }
-
-  //TODO: с помощью этой же функции "наводиться" на ворота
 
   def getCollisionWithWall(origin: Point, vector: Geometry.Vector): Point = {
     if (vector.length == 0) return null

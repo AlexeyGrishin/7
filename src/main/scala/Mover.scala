@@ -6,46 +6,12 @@ import WorldEx._
 import StrictMath._
 
 object Mover {
-  def doMoveAndStop(me: ModelUnit, target: ModelUnit, move: Move) {
-    doMove(me, target, move, needToStopAt = true)
-  }
 
-  def doMove(me: ModelUnit, target: ModelUnit, move: Move) {
-    doMove(me, target, move, needToStopAt = false)
-  }
-
-  def doMove(me: ModelUnit, target: ModelUnit, move: Move, needToStopAt: Boolean) {
-    if (!doTurn(me, target, move)) {
-      val distance = Geometry.distance(me, target)
-      val speed: Double = Math.sqrt(pow2(me.speedX) + pow2(me.speedY))
-      if (needToStopAt) {
-        if (distance > 100 && speed < 3) move.speedUp = 1
-        else if (distance < 100 && speed > 1) move.speedUp = -speed / 3
-        else if (distance < 100) {
-          move.speedUp = 0
-        }
-        else move.speedUp = 0.3
-      }
-      else {
-        move.speedUp = 1
-      }
-    }
-  }
-
-  def doTurn(me: ModelUnit, target: ModelUnit, move: Move): Boolean = {
-    doTurn(me, target, move, pi(0.1))
-  }
-
-  def doTurn(me: ModelUnit, target: ModelUnit, move: Move, angleLimit: Double): Boolean = {
-    val angle: Double = me.angleTo(target)
-    move.turn = angle
-    Math.abs(angle) >= angleLimit
-  }
 
   val predictStep = 10
   val predictDistance = 300
 
-  def estimatedRandevousPoint(me: Hockeyist, unit: ModelUnit, limit: Double = 2*game.stickLength) = unit.velocityVector match {
+  def estimatedRandevousPoint(me: Hockeyist, unit: ModelUnit, limit: Double = game.stickLength) = unit.velocityVector match {
     case NullVector() =>
       unit2point(unit)
     case v: Vector =>
@@ -73,7 +39,101 @@ object Mover {
   val angleEps = 0.01
   val estimationDelta = 20
 
-  def arriveToZone(me: Hockeyist, zone: PointSpecZone, move: Move): Boolean = {
+  def arriveToNetAndStop(me: Hockeyist, move: Move)(whileBrake: =>Unit): Boolean = {
+    val zone = WorldEx.myZone.net
+    if (zone.includes(me)) {
+      me.passFrom = null
+      me.passFromArrival = -1
+      true
+    }
+    else {
+      //bad reuse
+      me.targetPoints = List()
+
+      if (me.passFrom != null && me.passFromArrival < world.tick - estimationDelta) {
+        me.passFrom = null
+      }
+
+      var speedDown = false
+
+      if (me.passFrom == null) {
+        findFirstPointInZone(me, new Zone {
+          override def includes(p: Point): Boolean = zone.middle.distanceTo(p) <= me.radius
+        },  p => me.targetPoints = p :: me.targetPoints ) match {
+          case Some((point, time)) =>
+            val targetVelocity = Physics.velocityAfter(me, time)
+            if (targetVelocity > 0.6) {
+              //need to speed down
+              speedDown = true
+            }
+            else {
+              me.passFrom = point
+              me.passFromArrival = world.tick + time
+            }
+          case None =>
+        }
+      }
+
+      //we know target - do not speedup, just turn to enemy
+      if (me.passFrom != null) {
+        me.targetPoints = List(me.passFrom)
+        whileBrake
+        //ok, do nothing
+      }
+      else {
+        val moveVector = me -> zone.middle
+        me.moveVector = moveVector
+        me.moveVector_enemy = null
+        me.moveVector_target = null
+        doMove(me, moveVector, move, speedDown)
+        if (moveVector.dy ~~ 0 && me.velocityVector.dy ~~ 0) {
+          //do not turn - just move backward
+          move.turn = 0
+        }
+      }
+      false
+    }
+  }
+
+  def findFirstPointInZone(me: Hockeyist, zone: Zone, onEachPoint: (Point) => Unit): Option[(Point, Long)] = {
+    val velocity = me.velocity
+    var firstSkiped = false
+    for (dist <- predictStep to (predictDistance, predictStep)) {
+      val possibleTarget = Physics.targetAfter(me, (dist / velocity).toLong)
+      onEachPoint(possibleTarget)
+      //me.targetPoints = possibleTarget :: me.targetPoints
+      if (zone.includes(possibleTarget) && !firstSkiped) {
+        firstSkiped = true
+      }
+      else if (zone.includes(possibleTarget)) {
+        return Some((possibleTarget, (dist / velocity).toLong))
+        /*val whereToPass = if (possibleTarget.isTop) WorldEx.enemyZone.targetBottom else WorldEx.enemyZone.targetTop
+        me.passTo = whereToPass
+        me.targetPoints = whereToPass :: me.targetPoints
+        me.passFrom = possibleTarget
+        me.passFromArrival = world.tick + (dist / velocity).toLong*/
+      }
+    }
+
+    None
+  }
+
+  def doTurn(me: Hockeyist, target: Point, move: Move, from: Point = null, ticksLeft: Int = 0): Boolean = {
+    val angleAdjustement = Physics.angleAfter(me.angularSpeed, ticksLeft)
+    //if (ticksLeft != 0) println(me.angularSpeed, ticksLeft, angleAdjustement)
+    val angleTo = me.angleTo(Option(from).getOrElse(me.point), target) - angleAdjustement
+
+    if (Math.abs(angleTo) > angleEps) {
+      move.turn = angleTo
+      move.speedUp = 0
+      true
+    }
+    else {
+      false
+    }
+  }
+
+  def arriveToZone(me: Hockeyist, zone: PointSpecZone, move: Move, addStatus: (String) => Unit): Boolean = {
     me.inZone = zone.includes(me)
     if (zone.includes(me)) {
       val passFrom = if (me.passFrom != null && me.passFromArrival > world.tick - estimationDelta) me.passFrom else me.point
@@ -82,11 +142,10 @@ object Mover {
       //if (me.passTo == null) {
         me.passTo = if (passFrom.isTop) WorldEx.enemyZone.targetBottom else WorldEx.enemyZone.targetTop
       //}
-      val angleTo = me.angleTo(passFrom, me.passTo)
-      if (Math.abs(angleTo) > angleEps) {
-        move.turn = angleTo
-        move.speedUp = 0
-        return false
+      if (me.state != Swinging) {
+        if (doTurn(me, me.passTo, move, passFrom))
+          addStatus("doTurn2")
+          return false
       }
       val ticksRemaining = me.passFromArrival - world.tick
       val needSwing = WorldEx.enemyZone.needSwingWhenStrikeFrom(passFrom)
@@ -96,75 +155,72 @@ object Mover {
       else {
         move.action = ActionType.None
       }
-      me.startedTurning = false
       true
     }
     else {
       //TODO
       if (me.passFrom != null && me.passFromArrival < world.tick - estimationDelta) {
-        println("decided to cancel strike from last point")
+        addStatus("decided to cancel strike from last point")
         me.passFrom = null
-        me.startedTurning = false
       }
       val velocity = me.velocity
       me.targetPoints = List()
       if (me.passFrom == null) {
-        var firstSkiped = false
-        for (dist <- predictStep to (predictDistance, predictStep)) {
-          val possibleTarget = Physics.targetAfter(me, (dist / velocity).toLong)
-          me.targetPoints = possibleTarget :: me.targetPoints
-          if (zone.includes(possibleTarget) && !firstSkiped) {
-            firstSkiped = true
-          }
-          else if (zone.includes(possibleTarget)) {
+        findFirstPointInZone(me, zone, p => me.targetPoints = p :: me.targetPoints) match {
+          case Some((possibleTarget, ticksToArrival)) =>
             val whereToPass = if (possibleTarget.isTop) WorldEx.enemyZone.targetBottom else WorldEx.enemyZone.targetTop
-            me.passTo = whereToPass
-            me.targetPoints = whereToPass :: me.targetPoints
-            me.passFrom = possibleTarget
-            me.passFromArrival = world.tick + (dist / velocity).toLong
-          }
-        }
+            val angleTo = me.angleTo(possibleTarget, whereToPass)
+            val ticksToTurn = Physics.ticksForTurn(me, angleTo).toLong
+            val ticksToSwing = game.maxEffectiveSwingTicks
+            if (ticksToArrival <= ticksToSwing + ticksToTurn + 5) {
 
+              me.passTo = whereToPass
+              me.targetPoints = whereToPass :: me.targetPoints
+              me.passFrom = possibleTarget
+              me.passFromArrival = world.tick + ticksToArrival
+              addStatus("found point to stop at")
+            }
+            else {
+              addStatus("found point to stop at, but have time to move fwd")
+            }
+          case None =>
+        }
       }
 
       if (me.passFrom != null) {
+        //we may turn
         me.targetPoints = List(me.passFrom, me.passTo)
         val angleTo = me.angleTo(me.passFrom, me.passTo)
         val ticksToTurn = Physics.ticksForTurn(me, angleTo)
         var ticksToArrival = me.passFromArrival - world.tick
         val ticksToSwing = game.maxEffectiveSwingTicks
-        //recalculate ticks to arrival - they shall be smaller as we continue speedup
+        //recalculate ticks to arrival - shall not differ
         val ticksToArrival_now = Physics.timeToArrival(me, me.passFrom, ticksToArrival)
         var ticksDelta = 0.0
-        if (ticksToArrival_now < ticksToArrival) {
-          ticksDelta = ticksToArrival - ticksToArrival_now
-          ticksToArrival = ticksToArrival_now
-          me.passFromArrival = world.tick + ticksToArrival_now
+        if (ticksToArrival_now != ticksToArrival) {
+          //ticksDelta = ticksToArrival - ticksToArrival_now
+          //ticksToArrival = ticksToArrival_now
+          //me.passFromArrival = world.tick + ticksToArrival_now
+          addStatus(s"adjusted arrival time from ${ticksToArrival} to ${ticksToArrival_now}")
         }
         //println(s"adjusted arrival time - was ${me.passFromArrival - world.tick} now $ticksToArrival")
         //me.passFromArrival = world.tick + ticksToArrival
-        println(world.tick, ticksToArrival, ticksToSwing, ticksToTurn)
-        if (!me.startedTurning && (ticksToArrival - ticksToTurn - ticksToSwing > 2*ticksDelta)) {  //TODO: swing effective
-          //too earl to turn - continue speedup
-          move.speedUp = 1.0
-          return false
-        }
-        else if (Math.abs(angleTo) > angleEps) {
-          me.startedTurning = true
-          move.turn = angleTo
-          move.speedUp = 0
+        //println(world.tick, ticksToArrival, ticksToSwing, ticksToTurn)
+        val canTurn = me.state != Swinging || ticksToArrival_now > game.cancelStrikeActionCooldownTicks  //otherwise there will be no strike
+        if (canTurn && doTurn(me, me.passTo, move, me.passFrom, ticksToArrival_now.toInt)) {
+          addStatus("do turn1")
           return false
         }
         else {
-          //?
+          addStatus("do swing")
           move.action = Swing
           return false
         }
       }
 
-      me.startedTurning = false
+      addStatus("continue moving")
 
-      val ForwardLen = 30
+      val ForwardLen = 35
       val FarEnemy = 5
       val NearEnemy = 20
 
@@ -200,10 +256,10 @@ object Mover {
     }
   }
 
-  def doMove(me: Hockeyist, vector: Vector, move: Move): Unit = {
+  def doMove(me: Hockeyist, vector: Vector, move: Move, forceSpeeddown: Boolean = false): Unit = {
     val tp = vector(me)
     val product = me.lookVector normal_* vector
-    move.speedUp = product + 0.1
+    move.speedUp = if (forceSpeeddown) -0.01 else product * 1.1
     move.turn = me.angleTo(tp.x, tp.y)
     //TODO: try other strategies
   }

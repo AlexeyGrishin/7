@@ -59,7 +59,7 @@ object Geometry {
     def onOurSide = WorldEx.myZone.half.includes(this)
     def onEnemySide = WorldEx.enemyZone.half.includes(this)
 
-    def inNet = y >= WorldEx.game.rinkTop && y <= WorldEx.game.rinkBottom && (x <= WorldEx.game.rinkLeft || x >= WorldEx.game.rinkRight)
+    def inNet = y >= WorldEx.game.goalNetTop && y <= (WorldEx.game.goalNetTop + WorldEx.game.goalNetHeight) && (x <= WorldEx.game.rinkLeft || x >= WorldEx.game.rinkRight)
 
     override def toString = s"($x,$y)"
 
@@ -92,10 +92,10 @@ object Geometry {
     lazy val length = Math.hypot(dx, dy)
     def *(sc: Double) = new Vector(dx*sc, dy*sc)
 
-    def normal = new Vector(dx/length, dy/length)
+    def normal = if (length == 0) this else new Vector(dx/length, dy/length)
     def +(vec: Vector) = new Vector(dx + vec.dx, dy + vec.dy)
 
-    def +(addlen: Double) = apply((length + addlen))
+    def +(addlen: Double) = apply(length + addlen)
 
     def apply(from: Point) = new Point(from.x + dx, from.y + dy)
 
@@ -107,11 +107,11 @@ object Geometry {
 
     def ort = new Vector(dy, -dx)
 
-    def /=(coef: Double) = apply(coef / length)
+    def /=(coef: Double) = if (length == 0) this else apply(coef / length)
 
     override def toString = f"<$dx%.2f $dy%.2f = $length%.2f>"
 
-    def -(vec: Vector) = this + (vec.reverse)
+    def -(vec: Vector) = this + vec.reverse
 
     def *(vec: Vector) = dx * vec.dx + dy * vec.dy
 
@@ -129,10 +129,14 @@ object Geometry {
     def includes(p: Point): Boolean
   }
 
-  class Rectangle(p1: Point, p2: Point) extends Zone {
+  class Rectangle(up1: Point, up2: Point) extends Zone {
+    val p1 = new Point(Math.min(up1.x, up2.x), Math.min(up1.y, up2.y))
+    val p2 = new Point(Math.max(up1.x, up2.x), Math.max(up1.y, up2.y))
     override def includes(p: Point): Boolean = {
       p.x >= p1.x && p.x <= p2.x && p.y >= p1.y && p.y <= p2.y
     }
+    val cornerPoints = List(p1, p2, new Point(p1.x, p2.y), new Point(p2.x, p1.y))
+    val middle = new Point((p1.x + p2.x)/2, (p1.y + p2.y)/2)
   }
 
   class PointSpecZone(points: Traversable[Point]) extends Zone {

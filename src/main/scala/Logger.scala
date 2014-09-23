@@ -81,8 +81,8 @@ object Logger {
     addVector("look", lookDx, lookDy)
     if (hockeyist.moveVector != null) {
       addVector("move", hockeyist.moveVector.dx, hockeyist.moveVector.dy)
-      addVector("move target", hockeyist.moveVector_target.dx, hockeyist.moveVector_target.dy)
-      addVector("move enemy", hockeyist.moveVector_enemy.dx, hockeyist.moveVector_enemy.dy)
+      if (hockeyist.moveVector_target != null) addVector("move target", hockeyist.moveVector_target.dx, hockeyist.moveVector_target.dy)
+      if (hockeyist.moveVector_enemy != null) addVector("move enemy", hockeyist.moveVector_enemy.dx, hockeyist.moveVector_enemy.dy)
     }
     renderer.write("]")
     renderer.write(",table: [")
@@ -162,6 +162,10 @@ object Logger {
   }
 
   def renderDangerAreas(): Unit = {
+    renderer.write("\n{type: 'area', name: 'net', klass: 'my_net', points: [")
+    WorldEx.myZone.net.cornerPoints.foreach(p => renderer.write(s"[${p.x}, ${p.y}],"))
+    renderer.write("[]]")
+    renderer.write("},")
     renderer.write("\n{type: 'area', name: 'danger', klass: 'enemy_danger', points: [")
     WorldEx.enemyZone.defaultDangerZone.borderPoints.foreach(p => renderer.write(s"[${p.x}, ${p.y}],"))
     renderer.write("[]]")

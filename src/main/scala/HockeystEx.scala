@@ -11,7 +11,21 @@ class HockeystEx(var hockeyist: Hockeyist) {
   import WorldEx._
 
   var move: Move = new Move()
-  var role: Role = null
+  var _role: Role = null
+
+  def role = _role
+  def role_=(newRole: Role): Unit = {
+    if (newRole.name.equals(Option(_role).map(_.name).getOrElse("null"))) return
+    _role = newRole
+    moveVector = null
+    moveVector_enemy = null
+    moveVector_target = null
+    passTo = null
+    passFrom = null
+    passFromArrival = -1
+    startedTurning = false
+    inZone = false
+  }
 
   var moveVector: Vector = null
   var moveVector_target: Vector = null
@@ -20,7 +34,6 @@ class HockeystEx(var hockeyist: Hockeyist) {
   var passFrom: Point = null
   var passFromArrival: Long = 0
   var startedTurning: Boolean = false
-
   var inZone: Boolean = false
 
   def update(h: Hockeyist) = {

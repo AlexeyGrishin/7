@@ -47,12 +47,18 @@ object WorldEx {
   def isPuckOwnedByOur = world.puck.ownerPlayerId.contains(world.myPlayer.get.id)
   def isPuckOwnedByEnemy = world.puck.ownerPlayerId.contains(world.opponentPlayer.get.id)
 
+  val goalieR = 30.0
+
   lazy val leftZone = new PlayerZone(
     new Rectangle(new Point(0, 0), new Point(Geometry.middleX, Geometry.height)),
     new PointSpecZone(dangerLeft16),
     new PointSpecZone(dangerLeft20),
     new PointSpecZone(dangerLeft15),
-    DangerArea.targetPoint(world, game).toLeft
+    DangerArea.targetPoint(world, game).toLeft,
+    new Rectangle(
+      new Point(game.rinkLeft + goalieR*2.5, game.goalNetTop + game.goalNetHeight/2 - goalieR/2),
+      new Point(game.rinkLeft + goalieR*3.5, game.goalNetTop + game.goalNetHeight/2 + goalieR/2)
+    )
   )
 
   lazy val rightZone = new PlayerZone(
@@ -60,10 +66,15 @@ object WorldEx {
     new PointSpecZone(dangerRight16),
     new PointSpecZone(dangerRight20),
     new PointSpecZone(dangerRight15),
-    DangerArea.targetPoint(world, game).toRight
+    DangerArea.targetPoint(world, game).toRight,
+    new Rectangle(
+      new Point(game.rinkRight - goalieR*2.5, game.goalNetTop + game.goalNetHeight/2 - goalieR*2),
+      new Point(game.rinkRight - goalieR*4.5, game.goalNetTop + game.goalNetHeight/2 + goalieR*2)
+    )
+
   )
 
-  class PlayerZone(val half: Zone, val danger16: PointSpecZone, val danger20: PointSpecZone, val danger15: PointSpecZone, target: Point) {
+  class PlayerZone(val half: Zone, val danger16: PointSpecZone, val danger20: PointSpecZone, val danger15: PointSpecZone, target: Point, val net: Rectangle) {
     def needSwingWhenStrikeFrom(point: Point) = !danger16.includes(point)
 
     val targetTop: Point = target.toTop
@@ -74,6 +85,8 @@ object WorldEx {
     danger15.selfcheck()
     danger20.selfcheck()
     danger16.selfcheck()
+
+    val dx = signum(net.cornerPoints.head.x - Geometry.middleX)
 
     val defaultDangerZone = danger16
   }
@@ -108,4 +121,10 @@ object WorldEx {
   }
 
   implicit def u2ex(m: ModelUnit) = new ModelUnitEx(m)
+
+  class DoubleEx(d: Double) {
+    def ~~(an: Double): Boolean = abs(d - an) < 1e-4
+  }
+
+  implicit def d2ex(d: Double) = new DoubleEx(d)
 }

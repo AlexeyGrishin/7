@@ -1,28 +1,137 @@
-import model.ActionType.{TakePuck, Strike}
-import model.{Move, Game, World, Hockeyist}
+import model.ActionType.{Pass, TakePuck, Strike}
+import model.{Unit => ModelUnit, Hockeyist, World, Game, Move, Puck}
 
 import WorldEx._
 
 object Roles {
 
   def puckWillGoToOurNetAfterStrike(self: Hockeyist) = {
-    //check if we can strike it safely
-    val col = Physics.getCollisionWithWall(world.puck, self.lookVector)
+    puckWillGoToOurNet(self.lookVector)
+  }
+
+  def puckWillGoToOurNet(vec: Geometry.Vector) = {
+    val col = Physics.getCollisionWithWall(world.puck, vec)
     col != null && col.inNet && col.onOurSide
+  }
+
+  def puckWillGoToEnemyNet(vec: Geometry.Vector) = {
+    val col = Physics.getCollisionWithWall(world.puck, vec)
+    col != null && col.inNet && col.onEnemySide
+  }
+
+  object DoNothing extends Role {
+    override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
+      //nothing
+    }
   }
 
   object DoDefence extends Role {
     override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
-      //идем к центру ворот
-      //если противник будет в зоне опасности раньше - пробуем таранить (проверяем когда пересекли середину поля)
-      //иначе разворачиваемся лицом к шайбе в полете
-      //если уже у ворот - крутимся за шайбой
+      self.targetPoints = List()
+      lastStatus = ""
+      val net = WorldEx.myZone.net
+      val enemyWithPuck = world.hockeyists.find(h => h.isMoveableEnemy && h.ownPuck)
+      if (self.ownPuck) {
+        val ally = world.hockeyists.filter(_.isMoveableOur).filter(_.id != self.id).sortBy(h => Math.abs(self.angleTo(h))).head
+        lastStatus += "pass puck to ally"
+        if (self.remainingCooldownTicks > 0 || puckWillGoToOurNetAfterStrike(self)) {
+          Mover.doTurn(self, ally, move)
+        }
+        else {
+          move.action = Pass
+          move.passPower = 1.0
+          move.passAngle = self.angleTo(ally)
+        }
+        return
+      }
+
+      def ownPuckIfCan() = if (self.canOwnPuck) {
+        if (puckWillGoToOurNetAfterStrike(self)) {
+          lastStatus += "\ntake!"
+          move.action = TakePuck
+        }
+        else {
+          lastStatus += "\nstrike!"
+          move.action = Strike
+        }
+        true
+      } else false
+
+      if (!enemyWithPuck.isDefined && puckWillGoToOurNet(world.puck.velocityVector)) {
+        lastStatus += "puck is running to net"
+        if (!ownPuckIfCan()) {
+          val rp = Mover.estimatedRandevousPoint(self, world.puck)
+          if (rp.onOurSide) {
+            lastStatus += "\ngo to it"
+            self.passFrom = null //TODO: иначе arriveForNet может продолжать думать будто мы все еще идем к точке
+            //TODO: если идет сквозь меня - просто развернуться
+            Mover.arriveFor(self, world.puck, move)
+            return
+          }
+          else {
+            lastStatus += "\nis on enemy side, wait"
+          }
+        }
+      }
+      if (enemyWithPuck.isDefined && !net.includes(self)) {
+        val enemy = enemyWithPuck.get
+        if (WorldEx.myZone.danger20.includes(enemy)) {
+          lastStatus += "enemy in danger zone, we - not"
+        }
+        else {
+          val nearestZonePoint = WorldEx.myZone.danger20.borderPoints.sortBy(_.distanceTo(enemy)).head
+          val goingThere = enemy.velocity > 0 && enemy.point.onOurSide && StrictMath.signum(enemy.velocityVector.dx) == WorldEx.myZone.dx
+          if (goingThere) {
+            lastStatus += "enemy is going here"
+            val timeToZone = Physics.timeToArrival(enemy, nearestZonePoint, (nearestZonePoint.distanceTo(enemy) / enemy.velocity).toInt)
+            val timeToNet = Physics.timeToArrival(self, net.middle, (net.middle.distanceTo(self) / self.velocity).toInt)
+
+            if (timeToZone > timeToNet) {
+              lastStatus += "\n continue going to net"
+            }
+            else {
+              lastStatus += "\n no time for net. Time to kick ass"
+              if (!ownPuckIfCan) {
+                self.role = KickAsses
+                self.role.move(self, world, game, move)
+                self.role.lastStatus = lastStatus + "\n\n" + self.role.lastStatus
+              }
+              return
+            }
+          }
+          else {
+            lastStatus += "enemy is not going here"
+          }
+        }
+      }
+      val movingTarget = Physics.targetAfter(enemyWithPuck.getOrElse(world.puck), 40)
+      lastStatus += "\n"
+
+      if (net.includes(self)) {
+        Mover.doTurn(self, movingTarget, move, self.passFrom)
+        lastStatus += "look for puck"
+      }
+      else {
+        lastStatus += "go to net"
+        Mover.arriveToNetAndStop(self, move) {
+          Mover.doTurn(self, movingTarget, move, self.passFrom)
+        }
+      }
+      self.targetPoints = movingTarget :: self.targetPoints
     }
   }
 
   object StrikeToNet extends Role {
     override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
       //overtime - просто едем к воротам и лупим
+      if (puckWillGoToEnemyNet(self.lookVector)) {
+        lastStatus = "strike to enemy net"
+        move.action = Strike
+      }
+      else {
+        lastStatus = "turn to enemy net"
+        Mover.doMove(self, self -> WorldEx.enemyZone.net.middle, move)
+      }
     }
   }
 
@@ -45,6 +154,10 @@ object Roles {
       else if (!isPuckOwnedByEnemy && self.canOwnPuck) {
         lastStatus = "just take it"
         move.action = TakePuck
+      }
+      else if (isPuckOwnedByEnemy) {
+        lastStatus = "go to puck in enemy hands"
+        Mover.arriveFor(self, world.hockeyists.find(h => h.isMoveableEnemy && h.ownPuck).get, move)
       }
       else  {
         lastStatus = "go to puck"
@@ -84,7 +197,7 @@ object Roles {
     override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
       assert(self.ownPuck)
       lastStatus = ""
-      if (Mover.arriveToZone(self, WorldEx.enemyZone.defaultDangerZone, move)) {
+      if (Mover.arriveToZone(self, WorldEx.enemyZone.defaultDangerZone, move, s => lastStatus += s + "\n")) {
         lastStatus += "done, ready to strike"
         move.action = Strike
       }
