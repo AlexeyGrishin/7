@@ -57,7 +57,12 @@ object Roles {
         true
       } else false
 
-      if (!enemyWithPuck.isDefined && puckWillGoToOurNet(world.puck.velocityVector)) {
+
+      if (ownPuckIfCan()) {
+        return
+      }
+
+      if (!isPuckOwnedByOur && !enemyWithPuck.isDefined && puckWillGoToOurNet(world.puck.velocityVector)) {
         lastStatus += "puck is running to net"
         if (!ownPuckIfCan()) {
           val rp = Mover.estimatedRandevousPoint(self, world.puck)
@@ -73,6 +78,9 @@ object Roles {
           }
         }
       }
+
+      //TODO[fixed]: never leave net
+      /*
       if (enemyWithPuck.isDefined && !net.includes(self)) {
         val enemy = enemyWithPuck.get
         if (WorldEx.myZone.danger20.includes(enemy)) {
@@ -106,7 +114,7 @@ object Roles {
             lastStatus += "enemy is not going here"
           }
         }
-      }
+      }*/
       //TODO: for puck velocity vector == owner's lookvector
       val movingTarget = world.puck//TODO: Physics.targetAfter(enemyWithPuck.getOrElse(world.puck), 40)
       lastStatus += "\n"
@@ -135,6 +143,17 @@ object Roles {
       else {
         lastStatus = "turn to enemy net"
         Mover.doMove(self, self -> WorldEx.enemyZone.net.middle, move)
+      }
+    }
+  }
+
+  object FoolingAround extends Role {
+    override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
+      if (self.canOwnPuck) {
+        move.action = Strike
+      }
+      else {
+        LookupForPuck.move(self, world, game, move)
       }
     }
   }

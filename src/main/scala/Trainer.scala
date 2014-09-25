@@ -32,6 +32,9 @@ object Trainer {
     val our = world.hockeyists.filter(_.isMoveableOur).toList
     val List(withPuck, withoutPuck) = our.sortBy(h => if (h.ownPuck) 1 else 2)
     val List(nearToNet, farFromNet) = our.sortBy(h => h.distanceTo(WorldEx.myZone.net.middle))
+    /*if (withPuck.ownPuck) withPuck.role = Roles.MakeGoalAlone else withPuck.role = LookupForPuck
+    withoutPuck.role = if (world.tick < 500) Roles.FoolingAround else DoDefence
+    return*/
     gameState match {
       case GameState(_, _, true) =>
         our.foreach(_.role = KickAsses)
@@ -44,10 +47,7 @@ object Trainer {
       case GameState(We, _, _) =>
         if (withPuck.role != Roles.DoDefence) {
           withPuck.role = Roles.MakeGoalAlone
-          if (world.puck.onEnemySide)
-            withoutPuck.role = Roles.KickAsses
-          else
-            withoutPuck.role = Roles.DoDefence
+          withoutPuck.role = Roles.DoDefence
         }
       case GameState(Enemy, _, _) =>
         nearToNet.role = Roles.DoDefence

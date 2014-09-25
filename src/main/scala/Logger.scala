@@ -86,12 +86,14 @@ object Logger {
       if (hockeyist.moveVector_target != null) addVector("move target", hockeyist.moveVector_target.dx, hockeyist.moveVector_target.dy)
       if (hockeyist.moveVector_enemy != null) addVector("move enemy", hockeyist.moveVector_enemy.dx, hockeyist.moveVector_enemy.dy)
     }
+    hockeyist.targetVectors.foreach(v => addVector(v._1, v._2.dx, v._2.dy))
     renderer.write("]")
     renderer.write(",table: [")
     renderTable("cooldown", hockeyist.remainingCooldownTicks)
     renderTable("kickdown", hockeyist.remainingKnockdownTicks)
     renderTable("anglespeed", hockeyist.angularSpeed)
     renderTable("angle", hockeyist.angle)
+    if (hockeyist.moveVector_enemy != null) renderTable("enemy_vector", hockeyist.moveVector_enemy.length)
     renderer.write("[null,null]]")
     renderer.write("\n},")
     if (hockeyist.move.action == TakePuck) {

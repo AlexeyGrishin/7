@@ -24,12 +24,15 @@ class HockeystEx(var hockeyist: Hockeyist) {
     passFrom = null
     passFromArrival = -1
     startedTurning = false
+    targetVectors = List()
+    targetPoints = List()
     inZone = false
   }
 
   var moveVector: Vector = null
   var moveVector_target: Vector = null
   var moveVector_enemy: Vector = null
+  var targetVectors: List[(String, Vector)] = List()
   var passTo: Point = null
   var passFrom: Point = null
   var passFromArrival: Long = 0
@@ -46,7 +49,11 @@ class HockeystEx(var hockeyist: Hockeyist) {
   val isMoveableOur = hockeyist.playerId == world.myPlayer.get.id && hockeyist.hokeyistType != Goalie && hockeyist.state != Resting
 
   //TODO[fixed]: не учитывать валяющихся врагов при выборе цели
-  val isMoveableEnemy = hockeyist.playerId == world.opponentPlayer.get.id && hockeyist.hokeyistType != Goalie && hockeyist.state != Resting && hockeyist.state != KnockedDown
+  val isMoveableEnemy =
+    (hockeyist.playerId == world.opponentPlayer.get.id &&
+      hockeyist.hokeyistType != Goalie &&
+      hockeyist.state != Resting &&
+      hockeyist.state != KnockedDown) || (role == Roles.FoolingAround)
 
   def realSpeedup(backward: Boolean = false) = if (backward) game.hockeyistSpeedDownFactor else game.hockeyistSpeedUpFactor //TODO: calculate with stamina/agility
   def realTurnspeed = game.hockeyistTurnAngleFactor

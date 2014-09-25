@@ -227,7 +227,8 @@ object Mover {
 
       val ForwardLen = 35
       val FarEnemy = 5
-      val NearEnemy = 20
+      val NearEnemy = 15
+      val Wall = 6
 
       val allTargetPoints = zone.nearestTo(me).map(p => (me -> p)(ForwardLen))
       val enemies = world.hockeyists.filter(_.isMoveableEnemy).map(h => {
@@ -239,27 +240,43 @@ object Mover {
           p -> me.point
         }
         else {
-          h.lookVector
+          //h.lookVector
+          p -> me.point //TODO: not sure we need use "lookvector" when enemy is standby
         }
-        v(Math.max((distToMe / (game.stickLength*3)) * FarEnemy, FarEnemy))
+        //v(Math.max(((game.stickLength*2) / distToMe) * FarEnemy, NearEnemy))
+        v(Math.max(FarEnemy, FarEnemy + ((NearEnemy - FarEnemy)*(1 - distToMe/(game.stickLength)))))
       })
 
-
+      val wallVector = normalFromNearestWalls(me, 5*me.radius) * Wall
 
       val enemyVector = enemies.foldLeft(new Vector(0,0))(_ + _)
       val (targetVector, fullVector, product) = allTargetPoints.map(vector => {
-        val vecWithEnemy = vector + enemyVector
+        val vecWithEnemy = vector + enemyVector + wallVector
         val product = vecWithEnemy * me.velocityVector
         (vector, vecWithEnemy, product)
       }).toList.sortBy(_._3).reverse.head
       me.moveVector_enemy = enemyVector
       me.moveVector_target = targetVector
       me.moveVector = fullVector
+      me.targetVectors = ("from wall", wallVector) :: Nil
 
       doMove(me, me.moveVector, move)
       false
     }
   }
+
+  def normalFromNearestWalls(p: ModelUnit, limit: Double) = {
+    val radius = p.radius - 5 //pad - sometimes some part of hockeyist goes through wall
+    val vec = List(
+      new Vector(p.x - radius - game.rinkLeft, 0),
+      new Vector(0, p.y - radius - game.rinkTop),
+      new Vector(p.x + radius - game.rinkRight, 0),
+      new Vector(0, p.y + radius - game.rinkBottom)
+    ).filter(_.length < limit).foldLeft(new Vector(0, 0))(_ + _)
+    vec(1 - vec.length / limit)*2
+
+  }
+
 
   def doMove(me: Hockeyist, vector: Vector, move: Move, forceSpeeddown: Boolean = false): Unit = {
     val tp = vector(me)

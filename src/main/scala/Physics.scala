@@ -98,8 +98,8 @@ object Physics {
     }
   }
 
-  def targetAfter(hock: ModelUnit, time: Long, acceleration: Double = 0) = {
-    targetAfterCalculator(hock, acceleration, analyzeColision = true)(0, time)
+  def targetAfter(hock: ModelUnit, time: Long, acceleration: Double = 0, analyzeColision: Boolean = true) = {
+    targetAfterCalculator(hock, acceleration, analyzeColision)(0, time)
     /*val v0 = hock.velocity
     val k = hock.brakeK
     val logk = hock.logBrakeK
