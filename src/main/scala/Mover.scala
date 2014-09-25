@@ -16,13 +16,52 @@ object Mover {
       unit2point(unit)
     case v: Vector =>
       val dist = me.distanceTo(unit)
-      if (dist > limit) {
-        val coef = me.velocityVector normal_* unit.velocityVector
-        val distanceToReac = dist * 0.5 * (2 + coef)
-        val estimatedTime = Math.min(200, distanceToReac / unit.velocity)
+      val coef = me.velocityVector normal_* unit.realActor.velocityVector
+      val distanceToReac = dist * 0.5 * (2 + coef)
+      val estimatedTime = distanceToReac / unit.realActor.velocity//Math.min(200, distanceToReac / unit.velocity)
+      val estPoint = Physics.targetAfter(unit, estimatedTime.toLong, acceleration = true)
+      me.targetPoints = List()
+
+      val MaxAttempts = 4
+      def adjustEstimate(estPoint: Point, estimatedTime: Double, attempts: Int = MaxAttempts): Point = {
+
+        if (attempts == 0) {
+          return estPoint
+        }
+        val ang = Math.abs(me.angleTo(estPoint.x, estPoint.y))
+        if (ang < Math.toRadians(if (me.justAdjusted) 40 else 10)) {  //sometimes after we turn a bit the angle between us and target becomes > 5 deg
+          me.justAdjusted = false
+          //we are going straight forward, calculate arrival
+          val estOurPoint = Physics.targetAfter(me, estimatedTime.toLong, acceleration = true, analyzeColision = false)
+          me.targetPoints = estOurPoint :: me.targetPoints
+          val coef = me.distanceTo(estOurPoint) / me.distanceTo(estPoint)
+          val lenDiff = 1 - coef
+          if (Math.abs(lenDiff) > 0.3) {
+            val newTimeEstimate = (estimatedTime * (if (coef > 1) 0.8 else 1.2) ).toLong// Physics.timeToArrival(me, estPoint, (estimatedTime*coef).toLong, me.realSpeedup())
+            //println(s"${world.tick}:  reestimated from $estimatedTime to $newTimeEstimate")
+            //reestimate
+            val newEstPoint = Physics.targetAfter(unit, newTimeEstimate, acceleration = true)
+            me.targetPoints = newEstPoint :: me.targetPoints
+            val res = adjustEstimate(newEstPoint, newTimeEstimate, attempts - 1)
+            me.justAdjusted = true
+            res
+          }
+          else {
+            estPoint
+          }
+
+        }
+        else {
+          estPoint
+        }
+      }
+
+
+
+      if (dist > limit && estPoint.distanceTo(me) > limit) {
         //TODO[bug]: когда гонимся за другим хокеистом - стоит учитывать ускорение
         //TODO[bug]: и учитывать куда он смотрит. можно было развернуться раньше и перехватить 14401191e3431322f95f015dcc230776d66ccfeb 4877
-        Physics.targetAfter(unit, estimatedTime.toLong)
+        adjustEstimate(estPoint, estimatedTime)
       }
       else {
         unit2point(unit)
@@ -30,12 +69,13 @@ object Mover {
   }
 
   def arriveFor(me: Hockeyist, unit: ModelUnit, move: Move, limit: Double = game.stickLength): Unit = {
+
     val estimatedPoint = estimatedRandevousPoint(me, unit, limit)//TODO[fixed]: limit забыл передавать!!!
-    me.targetPoints = List(estimatedPoint)
+    me.targetPoints = estimatedPoint :: me.targetPoints
     me.moveVector_target = unit2point(me) -> estimatedPoint
     me.moveVector_enemy = new Vector(0,0)
     me.moveVector = me.moveVector_target + me.moveVector_enemy
-    doMove(me, me.moveVector, move)
+    doMove2(me, me.moveVector, move)
   }
 
   val angleEps = 0.01
@@ -87,11 +127,11 @@ object Mover {
         me.moveVector = moveVector
         me.moveVector_enemy = null
         me.moveVector_target = null
-        doMove(me, moveVector, move, speedDown)
-        if (moveVector.dy ~~ 0 && me.velocityVector.dy ~~ 0) {
+        doMove2(me, moveVector, move, speedDown)
+        //if (moveVector.dy ~~ 0 && me.velocityVector.dy ~~ 0) {
           //do not turn - just move backward
-          move.turn = 0
-        }
+          //move.turn = 0
+        //}
       }
       false
     }
@@ -232,7 +272,7 @@ object Mover {
 
       val allTargetPoints = zone.nearestTo(me).map(p => (me -> p)(ForwardLen))
       val enemies = world.hockeyists.filter(_.isMoveableEnemy).map(h => {
-        val p = estimatedRandevousPoint(me, h, 0)
+        val p = estimatedRandevousPoint(me, h, game.stickLength)
         me.targetPoints = p :: me.targetPoints
         val distToMe = p.distanceTo(me)
         val v = if (p != h.point) {
@@ -247,9 +287,11 @@ object Mover {
         v(Math.max(FarEnemy, FarEnemy + ((NearEnemy - FarEnemy)*(1 - distToMe/(game.stickLength)))))
       })
 
-      val wallVector = normalFromNearestWalls(me, 5*me.radius) * Wall
 
       val enemyVector = enemies.foldLeft(new Vector(0,0))(_ + _)
+      val wallVector = normalFromNearestWalls(me, 5*me.radius) * Wall
+
+
       val (targetVector, fullVector, product) = allTargetPoints.map(vector => {
         val vecWithEnemy = vector + enemyVector + wallVector
         val product = vecWithEnemy * me.velocityVector
@@ -260,7 +302,7 @@ object Mover {
       me.moveVector = fullVector
       me.targetVectors = ("from wall", wallVector) :: Nil
 
-      doMove(me, me.moveVector, move)
+      doMove2(me, me.moveVector, move)
       false
     }
   }
@@ -285,5 +327,14 @@ object Mover {
     move.turn = me.angleTo(tp.x, tp.y)
     //TODO[bug]: 14401191e3431322f95f015dcc230776d66ccfeb 4382 правильнее было бы затормозить. но произведение векторов положительное
   }
+
+  def doMove2(me: Hockeyist, vector: Vector, move: Move, forceSpeeddown: Boolean = false): Unit = {
+    me.moveVector = vector
+    val tp = vector(me)
+    val product = me.lookVector normal_* vector
+    move.speedUp = (product*2-1)*1.1
+    move.turn = me.angleTo(tp.x, tp.y)
+  }
+
 
 }

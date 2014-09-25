@@ -111,6 +111,10 @@ object WorldEx {
       case h: Hockeyist => h2ex(h).realSpeedup(backward)
       case _ => 0.0
     }
+    def realSpeedupToVelocityDirection = m match {
+      case h: Hockeyist => if (h.lookVector.normal_*(velocityVector) > 0.8) realSpeedup() else 0
+      case _ => 0.0
+    }
     val brakeK = m match {
       case h: Hockeyist => 1.0 - 1.0 / 50
       case _ => 1.0 - 1.0 / 1000
@@ -118,6 +122,12 @@ object WorldEx {
     val logBrakeK = log(brakeK)
     def velocityVector = new Vector(m.speedX, m.speedY)
     def point = new Point(m.x,m.y)
+
+    def realActor: ModelUnitEx = m match {
+      case p: Puck if p.ownerHockeyistId.isDefined => u2ex(world.hockeyists.find(_.ownPuck).get)
+      case _ => this
+    }
+
   }
 
   implicit def u2ex(m: ModelUnit) = new ModelUnitEx(m)

@@ -45,26 +45,14 @@ object Roles {
         return
       }
 
-      def ownPuckIfCan() = if (self.canOwnPuck) {
-        if (puckWillGoToOurNetAfterStrike(self)) {
-          lastStatus += "\ntake!"
-          move.action = TakePuck
-        }
-        else {
-          lastStatus += "\nstrike!"
-          move.action = Strike
-        }
-        true
-      } else false
 
-
-      if (ownPuckIfCan()) {
+      if (ownPuckIfCan(self, move)) {
         return
       }
 
-      if (!isPuckOwnedByOur && !enemyWithPuck.isDefined && puckWillGoToOurNet(world.puck.velocityVector)) {
+      if (!isPuckOwnedByOur && !enemyWithPuck.isDefined && puckWillGoToOurNet(world.puck.velocityVector) && world.puck.velocity > 14) {
         lastStatus += "puck is running to net"
-        if (!ownPuckIfCan()) {
+        if (!ownPuckIfCan(self, move)) {
           val rp = Mover.estimatedRandevousPoint(self, world.puck)
           if (rp.onOurSide) {
             lastStatus += "\ngo to it"
@@ -142,7 +130,42 @@ object Roles {
       }
       else {
         lastStatus = "turn to enemy net"
-        Mover.doMove(self, self -> WorldEx.enemyZone.net.middle, move)
+        Mover.doMove2(self, self -> WorldEx.enemyZone.net.middle, move)
+      }
+    }
+  }
+
+  object PreventStrike extends Role {
+    override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
+      if (ownPuckIfCan(self, move)) {
+        return
+      }
+      val enemyWithPuck = world.hockeyists.find(h => h.isMoveableEnemy && h.ownPuck).orNull
+      if (enemyWithPuck == null) {
+        //strange...
+        LookupForPuck.move(self, world, game, move)
+        return
+      }
+      val pointAfterSomeTime = Physics.targetAfter(enemyWithPuck, 250, acceleration = true)
+      enemyWithPuck.targetPoints = List(pointAfterSomeTime)
+      val enemyIsGoingToUs = WorldEx.myZone.half.includes(enemyWithPuck) || (enemyWithPuck.velocity > 1 && Math.signum(enemyWithPuck.speedX) == WorldEx.myZone.dx && WorldEx.myZone.half.includes(pointAfterSomeTime))
+      if (enemyIsGoingToUs) {
+        lastStatus = "enemy is going to us. intersect it\n"
+        val nearestDangerZonePoint = WorldEx.myZone.danger20.nearestTo(enemyWithPuck).toList.sortBy(p => enemyWithPuck.velocityVector normal_* (enemyWithPuck -> p)).reverse.head
+        enemyWithPuck.targetPoints = nearestDangerZonePoint :: self.targetPoints
+        if (WorldEx.myZone.danger20.includes(self) || WorldEx.myZone.danger20.includes(enemyWithPuck) || WorldEx.myZone.danger20.includes(world.puck) || nearestDangerZonePoint.distanceTo(enemyWithPuck) < 50) {
+          lastStatus += "enemy is here\n"
+          KickAsses.move(self, world, game, move)
+          lastStatus += KickAsses.lastStatus
+          return
+        }
+        Mover.doMove2(self, self -> nearestDangerZonePoint, move)
+
+      }
+      else {
+        lastStatus = "enemy is not going to us\n"
+        LookupForPuck.move(self, world, game, move)
+        lastStatus += LookupForPuck.lastStatus
       }
     }
   }
@@ -180,7 +203,7 @@ object Roles {
       }
       else if (isPuckOwnedByEnemy) {
         lastStatus = "go to puck in enemy hands"
-        Mover.arriveFor(self, world.hockeyists.find(h => h.isMoveableEnemy && h.ownPuck).get, move)
+        Mover.arriveFor(self, world.puck/*world.hockeyists.find(h => h.isMoveableEnemy && h.ownPuck).get*/, move)
       }
       else  {
         lastStatus = "go to puck"

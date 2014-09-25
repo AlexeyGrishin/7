@@ -69,23 +69,24 @@ object Physics {
   }
 
   def targetAfterCalculator(hock: ModelUnit, acceleration: Double = 0, analyzeColision: Boolean = false) = {
-    val v0 = hock.velocity
-    val k = hock.brakeK
-    val logk = hock.logBrakeK
-    val fullAccel = hock.realSpeedup() * acceleration
+    val realActor = hock.realActor
+    val v0 = realActor.velocity
+    val k = realActor.brakeK
+    val logk = realActor.logBrakeK
+    val fullAccel = /*realActor.realSpeedupToVelocityDirection * */ acceleration
     (timeFrom: Long, timeTo: Long) => {
       val distanceWoAcceleration = integ(timeTo, timeFrom, v0*pow(k,_)/logk)
       val accelDistance = if (fullAccel == 0) 0 else {
         integ(timeTo, timeFrom, t => fullAccel / k / logk * (pow(k, t) / logk - t))
       }
       val totalDistance = distanceWoAcceleration + accelDistance
-      val targetPoint = unit2velocityVector(hock)(totalDistance)(hock)
+      val targetPoint = realActor.velocityVector(totalDistance)(hock)
       if (analyzeColision) {
-        val cw = getCollisionWithWall(hock, hock.velocityVector)
+        val cw = getCollisionWithWall(hock, realActor.velocityVector)
         //very rude analysis
         if (cw != null && (cw.distanceTo(hock.point) < totalDistance)) {
           val restOfDistance = totalDistance - cw.distanceTo(hock.point)
-          val mirrored = mirrorAt(hock.velocityVector, cw)(restOfDistance / 4)
+          val mirrored = mirrorAt(realActor.velocityVector, cw)(restOfDistance / 4)
           mirrored(cw)
         }
         else {
@@ -98,28 +99,8 @@ object Physics {
     }
   }
 
-  def targetAfter(hock: ModelUnit, time: Long, acceleration: Double = 0, analyzeColision: Boolean = true) = {
-    targetAfterCalculator(hock, acceleration, analyzeColision)(0, time)
-    /*val v0 = hock.velocity
-    val k = hock.brakeK
-    val logk = hock.logBrakeK
-    val distanceWoAcceleration = integ(time, v0*pow(k,_)/logk)
-    val fullAccel = hock.realSpeedup() * acceleration
-    val accelDistance = if (fullAccel == 0) 0 else {
-      integ(time, t => fullAccel / k / logk * (pow(k, t) / logk - t))
-    }
-    val totalDistance = distanceWoAcceleration + accelDistance
-    val targetPoint = unit2velocityVector(hock)(totalDistance)(hock)
-    val cw = getCollisionWithWall(hock, hock.velocityVector)
-    //very rude analysis
-    if (cw != null && (cw.distanceTo(hock.point) < totalDistance)) {
-      val restOfDistance = totalDistance - cw.distanceTo(hock.point)
-      val mirrored = mirrorAt(hock.velocityVector, cw)(restOfDistance / 4)
-      mirrored(cw)
-    }
-    else {
-      targetPoint
-    }*/
+  def targetAfter(hock: ModelUnit, time: Long, acceleration: Boolean = false, analyzeColision: Boolean = true) = {
+    targetAfterCalculator(hock, if (acceleration) hock.realActor.realSpeedupToVelocityDirection else 0, analyzeColision)(0, time)
   }
 
   lazy val g = WorldEx.game
@@ -153,8 +134,10 @@ object Physics {
       xbottom = origin.x
       xtop = origin.x
     }
-    if (inRink(new Point(xbottom, g.rinkBottom)) && vector.matchesDx(xbottom - origin.x)) return new Point(xbottom, g.rinkBottom )
-    if (inRink(new Point(xtop, g.rinkTop)) && vector.matchesDx(xtop - origin.x)) return new Point(xtop, g.rinkTop )
+
+    def checkMatch(point: Point) = {
+      if (inRink(point) && vector.matchesDx(point.x - origin.x) && vector.matchesDy(point.y - origin.y)) Some(point) else None
+    }
 
     if (vector.dy != 0) {
       val vk = vector.dx / vector.dy
@@ -165,9 +148,12 @@ object Physics {
       yleft = origin.y
       yright = origin.y
     }
-    if (inRink(new Point(g.rinkLeft, yleft)) && vector.matchesDy(yleft - origin.y)) return new Point(g.rinkLeft, yleft )
-    if (inRink(new Point(g.rinkRight, yright)) && vector.matchesDy(yright - origin.y)) return new Point(g.rinkRight, yright )
-    null
+    List(
+      new Point(xbottom, g.rinkBottom),
+      new Point(xtop, g.rinkTop),
+      new Point(g.rinkLeft, yleft),
+      new Point(g.rinkRight, yright)).map(checkMatch).flatten.headOption.orNull
+
   }
 
 

@@ -24,6 +24,7 @@ class HockeystEx(var hockeyist: Hockeyist) {
     passFrom = null
     passFromArrival = -1
     startedTurning = false
+    justAdjusted = false
     targetVectors = List()
     targetPoints = List()
     inZone = false
@@ -38,6 +39,7 @@ class HockeystEx(var hockeyist: Hockeyist) {
   var passFromArrival: Long = 0
   var startedTurning: Boolean = false
   var inZone: Boolean = false
+  var justAdjusted: Boolean = false
 
   def update(h: Hockeyist) = {
     hockeyist = h

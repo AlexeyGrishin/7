@@ -28,13 +28,20 @@ object Trainer {
     }
   }
 
+  def reassignRoles2_temp(world: World, game: Game): Unit = {
+    val our = world.hockeyists.filter(_.isMoveableOur).toList
+    val List(withPuck, withoutPuck) = our.sortBy(h => if (h.ownPuck) 1 else 2)
+    val List(nearToNet, farFromNet) = our.sortBy(h => h.distanceTo(WorldEx.myZone.net.middle))
+
+    if (withPuck.ownPuck) withPuck.role = Roles.StrikeToNet else withPuck.role = LookupForPuck
+    withoutPuck.role = /*if (world.tick < 500) Roles.FoolingAround else*/ DoDefence
+  }
+
   def reassignRoles2(world: World, game: Game): Unit = {
     val our = world.hockeyists.filter(_.isMoveableOur).toList
     val List(withPuck, withoutPuck) = our.sortBy(h => if (h.ownPuck) 1 else 2)
     val List(nearToNet, farFromNet) = our.sortBy(h => h.distanceTo(WorldEx.myZone.net.middle))
-    /*if (withPuck.ownPuck) withPuck.role = Roles.MakeGoalAlone else withPuck.role = LookupForPuck
-    withoutPuck.role = if (world.tick < 500) Roles.FoolingAround else DoDefence
-    return*/
+
     gameState match {
       case GameState(_, _, true) =>
         our.foreach(_.role = KickAsses)
@@ -43,7 +50,7 @@ object Trainer {
         withoutPuck.role = Roles.KickAsses
       case GameState(Enemy, true, _) =>
         nearToNet.role = Roles.DoDefence
-        farFromNet.role = Roles.LookupForPuck
+        farFromNet.role = Roles.PreventStrike
       case GameState(We, _, _) =>
         if (withPuck.role != Roles.DoDefence) {
           withPuck.role = Roles.MakeGoalAlone
@@ -51,7 +58,7 @@ object Trainer {
         }
       case GameState(Enemy, _, _) =>
         nearToNet.role = Roles.DoDefence
-        farFromNet.role = Roles.LookupForPuck
+        farFromNet.role = Roles.PreventStrike
       case GameState(Noone, _, _) =>
         nearToNet.role = Roles.DoDefence
         farFromNet.role = Roles.LookupForPuck
