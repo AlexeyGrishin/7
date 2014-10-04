@@ -50,6 +50,7 @@ object Geometry {
       if (x > middleX) x else width - x,
       y
     )
+    def mirrorY = if (isTop) toBottom else toTop
 
     def isLeft = x < middleX
     def isRight = x >= middleX
@@ -112,6 +113,7 @@ object Geometry {
     override def toString = f"<$dx%.2f $dy%.2f = $length%.2f>"
 
     def -(vec: Vector) = this + vec.reverse
+    def -(addlen: Double) = this + (-addlen)
 
     def *(vec: Vector) = dx * vec.dx + dy * vec.dy
 
@@ -123,10 +125,56 @@ object Geometry {
 
     def matchesDx(dx: Double) = signum(this.dx) == signum(dx)
     def matchesDy(dy: Double) = signum(this.dy) == signum(dy)
+
+    def toLine(from: Point) = new Line(this, from)
   }
+
+  class Line(vector: Vector, val begin: Point) {
+    def this(from: Point, to: Point) = this(from->to, from)
+    val normal = vector.normal
+    val end = vector(begin)
+
+    def distanceTo(point: Point) = {
+      ortVector(point).length
+    }
+
+    def ortVector(point: Point) = {
+      val point2this = point -> begin
+      val k = normal * point2this
+      val vecModified = normal * k
+      point2this - vecModified
+    }
+
+    def directionTo(to: Point) = {
+      (begin -> to) * normal > 0
+    }
+
+    def dot(to: Point) = (begin -> to) * normal
+
+  }
+
+
 
   trait Zone {
     def includes(p: Point): Boolean
+    def toTop: Zone
+    def toBottom: Zone
+    val borderPoints: Traversable[Point]
+    val targetPoints: Traversable[Point]
+
+    def +(another: Zone): Zone = {
+      val self = this
+      new Zone {
+      override def includes(p: Point): Boolean = self.includes(p) || another.includes(p)
+
+      override def toBottom: Zone = self.toBottom + another.toBottom
+
+      override def toTop: Zone = self.toTop + another.toTop
+
+      override val targetPoints: Traversable[Point] = self.targetPoints ++ another.targetPoints
+      override val borderPoints: Traversable[Point] = self.borderPoints ++ another.borderPoints
+    }
+    }
   }
 
   class Rectangle(up1: Point, up2: Point) extends Zone {
@@ -139,18 +187,39 @@ object Geometry {
     val middle = new Point((p1.x + p2.x)/2, (p1.y + p2.y)/2)
     val closerToNetPoint = new Point(if (p1.x < middleX) p1.x else p2.x, middle.y)
 
-    val middleZone = new Zone {
-      override def includes(p: Point): Boolean = middle.distanceTo(p) <= 30
+
+    override lazy val targetPoints: Traversable[Point] = new Rectangle(
+      new Point(p1.x + 50, p1.y + 50), new Point(p2.x - 50, p2.y - 50)
+    ).borderPoints
+
+    override val borderPoints = splitLine(p1, new Point(p1.x, p2.y)) ++ splitLine(p1, new Point(p2.x, p1.y)) ++ splitLine(new Point(p1.x, p2.y), p2) ++ splitLine(new Point(p2.x, p1.y), p2)
+
+    def splitLine(p1: Point, p2: Point, step: Int = 50) = {
+      if (p1.x == p2.x) {
+        for (y <- p1.y to (p2.y, step)) yield new Point(p1.x, y)
+      }
+      else {
+        for (x <- p1.x to (p2.x, step)) yield new Point(x, p1.y)
+      }
     }
+
+
+    override def toTop = new Rectangle(up1.toTop, up2.toTop)
+    override def toBottom = new Rectangle(up1.toBottom, up2.toBottom)
+    def toLeft = new Rectangle(up1.toLeft, up2.toLeft)
+    def toRight = new Rectangle(up1.toRight, up2.toRight)
   }
 
   class PointSpecZone(points: Traversable[Point]) extends Zone {
     private val map = points.groupBy(_.y).map(kv => kv._1 -> (kv._2.map(_.x).min, kv._2.map(_.x).max))
     val borderPointsPerY = map.toList.map(kv => (new Point(kv._2._1, kv._1), new Point(kv._2._2, kv._1)))
-    val borderPoints = borderPointsPerY.map(kv => Seq(kv._1, kv._2)).flatten
+    override val borderPoints = borderPointsPerY.map(kv => Seq(kv._1, kv._2)).flatten
     val yes: List[Double] = map.keys.toList.sortBy(f=>f)
     val topY = if (yes.isEmpty) 0 else yes.min
     val bottomY = if (yes.isEmpty) 0 else yes.max
+
+
+    override val targetPoints: Traversable[Point] = borderPointsPerY.map(lr => new Point((lr._1.x + lr._2.x) / 2, lr._1.y))
 
     override def includes(p: Point): Boolean = includes(p, 0)
 
@@ -164,7 +233,6 @@ object Geometry {
     }
 
     def nearestTo(p: Point): Traversable[Point] = {
-      //TODO[fixed]: nearest
       val t = if (p.distanceTo(borderPointsPerY.head._1) < p.distanceTo(borderPointsPerY.head._2)) borderPointsPerY.map(_._1) else borderPointsPerY.map(_._2)
       //t.filter(p => p.y == topY || p.y == bottomY)
       t
@@ -177,6 +245,11 @@ object Geometry {
         }
       }
     }
+
+    override def toBottom = new PointSpecZone(borderPoints.filter(_.isBottom))
+    override def toTop = new PointSpecZone(borderPoints.filter(_.isTop))
+
+    def to(p: Point) = if (p.isTop) toTop else toBottom
   }
 
   lazy val width = WorldEx.game.worldWidth
@@ -186,6 +259,7 @@ object Geometry {
 
   object Vector {
     def unapply(v: Vector): Option[(Double, Double)] = Some((v.dx, v.dy))
+    def sum(vectors: Traversable[Vector]) = vectors.foldLeft(new Vector(0,0))(_+_)
   }
 
   object NullVector extends Vector(0, 0) {

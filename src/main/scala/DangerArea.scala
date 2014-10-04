@@ -1,4 +1,4 @@
-import Geometry.Point
+import Geometry.{Rectangle, Point}
 import model.{Game, World}
 
 import scala.collection.mutable.ListBuffer
@@ -15,8 +15,32 @@ object DangerArea {
   }
 
   def safetyPad = 3
+  val unitRadius = 30
+  val unitPad = 15
 
-  def calculatePoints(world: World, game: Game, step: Int = 15, puckSpeed: Double = 16, gap: Int = 5) = {
+  def speedupZone1(world: World, game: Game) = {
+    new Rectangle(
+      new Point(Geometry.middleX - 300, game.rinkTop + unitPad),
+      new Point(Geometry.middleX - 100, Geometry.middleY -  unitRadius*4)
+    )
+  }
+
+  def speedupZone2(world: World, game: Game) = {
+    new Rectangle(
+      new Point(Geometry.middleX + 50, game.rinkTop + unitPad),
+      new Point(Geometry.middleX + 150, game.goalNetTop - unitRadius*2)
+    )
+
+  }
+
+  def startZone(world: World, game: Game) = {
+    new Rectangle(
+      new Point(game.rinkLeft + WorldEx.goalieR*6, game.goalNetTop + game.goalNetHeight/2 - WorldEx.goalieR*2),
+      new Point(Geometry.middleX - 200, game.goalNetTop + game.goalNetHeight/2 + WorldEx.goalieR*2)
+    )
+  }
+
+  def calculatePoints(world: World, game: Game, step: Int = 25, puckSpeed: Double = 16, gap: Int = 5) = {
     val points = new ListBuffer[Point]
     val xnet = game.goalNetWidth
     val ynet = game.goalNetTop
@@ -26,7 +50,7 @@ object DangerArea {
     val goalV = game.goalieMaxSpeed
 
     val endX = game.worldWidth
-    val endY = game.rinkBottom - game.puckBindingRange
+    val endY = game.rinkBottom - game.puckBindingRange - unitRadius + unitPad
 
     val puckKeeperDistance = game.puckBindingRange
 
@@ -56,7 +80,7 @@ object DangerArea {
     val target = new Point(targetX, targetY)
 
     for (x <- (xnet + goalR*2) to (endX, step)) {
-      for (y <- (ynet + netH) to (endY, step)) {
+      for (y <- (ynet) to (endY, step)) {
         if (isDanger(x, y)) {
           val vecFromTarget = (target -> new Point(x,y)) + puckKeeperDistance
           val src = target -> vecFromTarget

@@ -34,7 +34,7 @@ object WorldEx {
   lazy val danger15= DangerArea.calculatePoints(world, game, puckSpeed = 15)
   lazy val dangerLeft15 = danger15.map(p => Seq(p.toLeft.toTop, p.toLeft.toBottom)).flatten
   lazy val dangerRight15 = danger15.map(p => Seq(p.toRight.toTop, p.toRight.toBottom)).flatten
-  lazy val danger20= DangerArea.calculatePoints(world, game, puckSpeed = 18)  //TODO: rename :)
+  lazy val danger20= DangerArea.calculatePoints(world, game, puckSpeed = 20)  //TODO: rename :)
   lazy val dangerLeft20 = danger20.map(p => Seq(p.toLeft.toTop, p.toLeft.toBottom)).flatten
   lazy val dangerRight20 = danger20.map(p => Seq(p.toRight.toTop, p.toRight.toBottom)).flatten
 
@@ -56,9 +56,12 @@ object WorldEx {
     new PointSpecZone(dangerLeft15),
     DangerArea.targetPoint(world, game).toLeft,
     new Rectangle(
-      new Point(game.rinkLeft + goalieR*2.5, game.goalNetTop + game.goalNetHeight/2 - goalieR*2),
-      new Point(game.rinkLeft + goalieR*4.5, game.goalNetTop + game.goalNetHeight/2 + goalieR*2)  //TODO[fixed]: shall use same consts as for right side!
-    )
+      new Point(game.rinkLeft + goalieR*2.5, game.goalNetTop + game.goalNetHeight/2 - goalieR),
+      new Point(game.rinkLeft + goalieR*4.5, game.goalNetTop + game.goalNetHeight/2 + goalieR)
+    ),
+    DangerArea.speedupZone1(world, game).toLeft,
+    DangerArea.speedupZone2(world, game).toRight,
+    DangerArea.startZone(world, game).toLeft
   )
 
   lazy val rightZone = new PlayerZone(
@@ -68,17 +71,35 @@ object WorldEx {
     new PointSpecZone(dangerRight15),
     DangerArea.targetPoint(world, game).toRight,
     new Rectangle(
-      new Point(game.rinkRight - goalieR*2.5, game.goalNetTop + game.goalNetHeight/2 - goalieR*2),
-      new Point(game.rinkRight - goalieR*4.5, game.goalNetTop + game.goalNetHeight/2 + goalieR*2)
-    )
+      new Point(game.rinkRight - goalieR*2.5, game.goalNetTop + game.goalNetHeight/2 - goalieR),
+      new Point(game.rinkRight - goalieR*4.5, game.goalNetTop + game.goalNetHeight/2 + goalieR)
+    ),
+    DangerArea.speedupZone1(world, game).toRight,
+    DangerArea.speedupZone2(world, game).toLeft,
+    DangerArea.startZone(world, game).toRight
 
   )
 
-  class PlayerZone(val half: Zone, val danger16: PointSpecZone, val danger20: PointSpecZone, val danger15: PointSpecZone, target: Point, val net: Rectangle) {
+  class PlayerZone(val half: Zone,
+                   val danger16: PointSpecZone,
+                   val danger20: PointSpecZone,
+                   val danger15: PointSpecZone,
+                   target: Point,
+                   val net: Rectangle,
+                   speedupZone1: Rectangle,
+                   speedupZone2: Rectangle,
+                   val start: Rectangle
+                    ) {
     def needSwingWhenStrikeFrom(point: Point) = !danger16.includes(point)
 
     val targetTop: Point = target.toTop
     val targetBottom: Point = target.toBottom
+
+    val speedupZone1Top = speedupZone1.toTop
+    val speedupZone1Bottom = speedupZone1.toBottom
+    val speedupZone2Top = speedupZone2.toTop
+    val speedupZone2Bottom = speedupZone2.toBottom
+
 
     assert(half.includes(targetBottom))
     assert(half.includes(targetTop))
@@ -120,7 +141,10 @@ object WorldEx {
       case _ => 1.0 - 1.0 / 1000
     }
     val logBrakeK = log(brakeK)
-    def velocityVector = new Vector(m.speedX, m.speedY)
+    def velocityVector = if (m.speedX != 0 || m.speedY != 0) new Vector(m.speedX, m.speedY) else m match {
+      case h: Hockeyist => h.lookVector
+      case _ => new Vector(0,0)
+    }
     def point = new Point(m.x,m.y)
 
     def realActor: ModelUnitEx = m match {

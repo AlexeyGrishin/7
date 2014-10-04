@@ -9,7 +9,26 @@ trait Role {
 
   var lastStatus: String = ""
 
-  def ownPuckIfCan(self: Hockeyist, move: Move) = if (self.canOwnPuck) {
+  val appender = (s: String) => lastStatus += s + "\n"
+
+  def takeIfCan(self: Hockeyist, move: Move) = if (self.canOwnPuck) {
+    lastStatus += "take\n"
+    move.action = TakePuck
+    true
+  }
+  else {
+    false
+  }
+
+  def strikeEnemyIfCan(self: Hockeyist, move: Move) = {
+    val enemy = world.hockeyists.filter(_.isMoveableEnemy).find(self.canPunch)
+    if (enemy.isDefined) {
+      move.action = Strike
+    }
+    enemy.isDefined
+  }
+
+  def strikeOrTakeIfCan(self: Hockeyist, move: Move) = if (self.canOwnPuck) {
     if (Roles.puckWillGoToOurNetAfterStrike(self)) {
       lastStatus += "\ntake!"
       move.action = TakePuck

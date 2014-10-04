@@ -3,7 +3,7 @@ import java.nio.file.{StandardCopyOption, Paths, Files}
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import Geometry.Point
+import Geometry.{Rectangle, Point}
 import model.ActionType.{TakePuck, Pass}
 import model.{Puck, Move, Hockeyist, World}
 import WorldEx._
@@ -67,7 +67,7 @@ object Logger {
     kls.append(" ")
     kls.append(hockeyist.state.toString)
     if (hockeyist.inZone) kls.append(" in_zone")
-    render("name" -> ((if (isOur) "Our " else "Enemy ") + hockeyist.hokeyistType.toString + " " + hockeyist.id + " " + hockeyist.statusStr), first = true)
+    render("name" -> ((if (isOur) "Our " else "Enemy ") + hockeyist.hockeyistType.toString + " " + hockeyist.id + " " + hockeyist.statusStr), first = true)
     render("x" -> hockeyist.x)
     render("y" -> hockeyist.y)
     render("vx" -> hockeyist.speedX)
@@ -92,6 +92,8 @@ object Logger {
     renderTable("cooldown", hockeyist.remainingCooldownTicks)
     renderTable("kickdown", hockeyist.remainingKnockdownTicks)
     renderTable("anglespeed", hockeyist.angularSpeed)
+    renderTable("time to puck", hockeyist.timeToGetPuck)
+    renderTable("time to puck stat", hockeyist.timeToGetPuckStat)
     renderTable("angle", hockeyist.angle)
     if (hockeyist.moveVector_enemy != null) renderTable("enemy_vector", hockeyist.moveVector_enemy.length)
     renderer.write("[null,null]]")
@@ -139,7 +141,7 @@ object Logger {
   }
 
   def renderTargetPoint(hock: Hockeyist, p: Point): Unit = {
-    renderer.write(s"{type:'point', name:'target for ${hock.hokeyistType}', x: ${p.x}, y: ${p.y}, tag: ${hock.id}},")
+    renderer.write(s"{type:'point', name:'target for ${hock.hockeyistType}', x: ${p.x}, y: ${p.y}, tag: ${hock.id}},")
   }
 
   private def logWorld(world: World): Unit = {
@@ -165,6 +167,15 @@ object Logger {
     renderer.flush()
   }
 
+  def renderArea(name: String, area: Rectangle): Unit = {
+    renderer.write(s"\n{type: 'area', name: '$name', klass: '$name', points: [")
+    area.borderPoints.foreach(p => renderer.write(s"[${p.x}, ${p.y}],"))
+    area.targetPoints.foreach(p => renderer.write(s"[${p.x}, ${p.y}],"))
+    renderer.write("[]]")
+    renderer.write("},")
+
+  }
+
   def renderDangerAreas(): Unit = {
     renderer.write("\n{type: 'area', name: 'net', klass: 'my_net', points: [")
     WorldEx.myZone.net.cornerPoints.foreach(p => renderer.write(s"[${p.x}, ${p.y}],"))
@@ -172,12 +183,18 @@ object Logger {
     renderer.write("},")
     renderer.write("\n{type: 'area', name: 'danger', klass: 'enemy_danger', points: [")
     WorldEx.enemyZone.defaultDangerZone.borderPoints.foreach(p => renderer.write(s"[${p.x}, ${p.y}],"))
+    WorldEx.enemyZone.defaultDangerZone.targetPoints.foreach(p => renderer.write(s"[${p.x}, ${p.y}],"))
     renderer.write("[]]")
     renderer.write("},")
     renderer.write("\n{type: 'area', name: 'danger', klass: 'our_danger', points: [")
-    WorldEx.myZone.defaultDangerZone.borderPoints.foreach(p => renderer.write(s"[${p.x}, ${p.y}],"))
+    WorldEx.myZone.danger20.borderPoints.foreach(p => renderer.write(s"[${p.x}, ${p.y}],"))
     renderer.write("[]]")
     renderer.write("},")
+    renderArea("speedup1", WorldEx.myZone.speedupZone1Top)
+    renderArea("speedup1", WorldEx.myZone.speedupZone1Bottom)
+    renderArea("speedup2", WorldEx.myZone.speedupZone2Top)
+    renderArea("speedup2", WorldEx.myZone.speedupZone2Bottom)
+    renderArea("start", WorldEx.myZone.start)
     renderer.write(s"{type:'point', name:'target', 'klass': 'our_target', x:${WorldEx.enemyZone.targetTop.x}, y:${WorldEx.enemyZone.targetTop.y}},")
   }
 
@@ -185,7 +202,7 @@ object Logger {
     if (!enabled) return
     val tl =
       (f"""
-        | ${hock.hokeyistType}%s ${hock.id}%d ${hock.statusStr}%s
+        | ${hock.hockeyistType}%s ${hock.id}%d ${hock.statusStr}%s
         |   T:${move.turn}%.2f S:${move.speedUp}%.2f A:${move.action}%s
         |   ${hock.role.name}%s: ${hock.role.lastStatus}%s
       """.stripMargin + (move.action match {

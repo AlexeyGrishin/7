@@ -32,7 +32,7 @@ object ZRepeater extends App {
       case Some(token) => {
         println(s"token is $token")
         val p = s"java -jar repeater/repeater.jar $token".run()
-        Runner.main(Array(token))
+        Runner.main(Array(if (args.length == 1) token else args(1)))
         p.destroy()
         System.exit(0)
       }

@@ -33,8 +33,10 @@ object Trainer {
     val List(withPuck, withoutPuck) = our.sortBy(h => if (h.ownPuck) 1 else 2)
     val List(nearToNet, farFromNet) = our.sortBy(h => h.distanceTo(WorldEx.myZone.net.middle))
 
-    if (withPuck.ownPuck) withPuck.role = Roles.StrikeToNet else withPuck.role = LookupForPuck
-    withoutPuck.role = /*if (world.tick < 500) Roles.FoolingAround else*/ DoDefence
+    nearToNet.role = DoDefence
+    farFromNet.role = Roles.FoolingAround
+    //if (withPuck.ownPuck) withPuck.role = Roles.StrikeToNet else withPuck.role = LookupForPuck
+    //withoutPuck.role = /*if (world.tick < 500) Roles.FoolingAround else*/ DoDefence
   }
 
   def reassignRoles2(world: World, game: Game): Unit = {
@@ -53,7 +55,7 @@ object Trainer {
         farFromNet.role = Roles.PreventStrike
       case GameState(We, _, _) =>
         if (withPuck.role != Roles.DoDefence) {
-          withPuck.role = Roles.MakeGoalAlone
+          withPuck.role = Roles.MakeGoal2
           withoutPuck.role = Roles.DoDefence
         }
       case GameState(Enemy, _, _) =>
@@ -72,9 +74,10 @@ object Trainer {
   }
 
   def reassignRoles3(world: World, game: Game): Unit = {
-    val attacker = world.hockeyists.find(h => h.isOur && h.hokeyistType == HockeyistType.Forward).get
-    val defencer = world.hockeyists.find(h => h.isOur && h.hokeyistType == HockeyistType.Defenceman).get
-    val helper = world.hockeyists.find(h => h.isOur && h.hokeyistType == HockeyistType.Versatile).get
+    //TODO: switch attacker<->defencer
+    val defencer = world.hockeyists.find(h => h.isOur && h.hockeyistType == HockeyistType.Forward).get
+    val attacker = world.hockeyists.find(h => h.isOur && h.hockeyistType == HockeyistType.Defenceman).get
+    val helper = world.hockeyists.find(h => h.isOur && h.hockeyistType == HockeyistType.Versatile).get
     reassignRoles36(world, game, attacker, defencer, helper)
   }
 
@@ -87,21 +90,22 @@ object Trainer {
         withoutPuck.foreach(_.role = Roles.KickAsses)
       case GameState(Enemy, true, _) =>
         attacker.role = Roles.LookupForPuck
-        helper.role = Roles.KickAsses
+        helper.role = Roles.LookupForPuck
         defencer.role = Roles.DoDefence
       case GameState(We, _, _) =>
-        if (withPuck.get != defencer)
-          withPuck.get.role = Roles.MakeGoalAlone
-        withoutPuck.foreach(_.role = Roles.KickAsses)
-        defencer.role = Roles.DoDefence
+        if (withPuck.get != defencer) {
+          withPuck.get.role = Roles.MakeGoal2
+          withoutPuck.foreach(_.role = Roles.KickAsses)
+          defencer.role = Roles.DoDefence
+        }
       case GameState(Enemy, _, _) =>
         attacker.role = Roles.LookupForPuck
-        helper.role = Roles.KickAsses
+        helper.role = Roles.PreventStrike
         defencer.role = Roles.DoDefence
       case GameState(Noone, _, _) =>
         attacker.role = Roles.LookupForPuck
-        helper.role = Roles.KickAsses
-        defencer.role = Roles.KickAsses
+        helper.role = Roles.LookupForPuck
+        defencer.role = Roles.DoDefence
 
     }
   }

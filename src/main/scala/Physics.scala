@@ -1,6 +1,5 @@
 import WorldEx._
-import Geometry.Point
-import Geometry.Vector
+import Geometry.{Line, Point, Vector}
 import model.Hockeyist
 import model.{Unit => ModelUnit}
 import StrictMath._
@@ -44,17 +43,104 @@ object Physics {
   }
 
   def integ(to: Double, ifn: (Double) => Double) = ifn(to) - ifn(0)
-  def integ(to: Double, from: Double, ifn: (Double) => Double) = ifn(to) - ifn(from)
+  def integ(from: Double, to: Double, ifn: (Double) => Double) = ifn(to) - ifn(from)
 
-  def timeToArrival(hock: ModelUnit, target: Point, estimate: Long, acceleration: Double = 0) = {
-    //very slow...
+  val Following = "following"
+  val OnWay = "on way"
+  val Other = "far from"
+  val Intersect = "intersect"
+
+  /// who -> mover ---> target      Following
+  /// mover --> who ---> target     OnWay
+  /// mover ---> target <--- who    Intersect
+
+
+  def positionRelativeOf(who: Hockeyist, mover: Hockeyist, target: Point) = {
+    val mover2target = new Line(mover.point, target)
+    val dot = mover2target.normal * (who.point -> mover.point)
+    val distance = mover2target.distanceTo(who)
+
+    if (dot > 0.7 && distance <= who.radius*1.5) {
+      //same line, following
+      Following
+
+    }
+    else if (dot < -0.7 && distance <= who.radius*1.5) {
+      //same line, before/between
+      if ((who.point->target) * mover2target.normal > 0.7)
+        OnWay
+      else
+        Intersect
+    }
+    else {
+      //other
+      Other
+    }
+  }
+
+  def isEnemyOnWay(me: Hockeyist, target: Point, enemy: Hockeyist) = {
+    positionRelativeOf(enemy, me, target) == OnWay
+  }
+
+  //rturn vector len = 1 - directly on way < radius*prec, ~0 - > radius*prec
+  //                 = 1 - distance <= radius*prec * 2, ~0 - distance is ~1000
+  def getAvoidanceVector(me: Hockeyist, vector: Vector, maxDistance: Double, obj: ModelUnit, prec: Double = 1.5) = {
+    val line = vector.toLine(me.point)
+    val normalFromObj = line.ortVector(obj)
+    val colDistance = me.radius + obj.radius
+    if (normalFromObj.length <= colDistance*prec && me.distanceTo(obj) < maxDistance && line.directionTo(obj)) {
+      val avoidanceVector = if (normalFromObj.length == 0) {
+        vector.ort
+      } else normalFromObj
+      avoidanceVector.normal * ( 1.01 - Math.max(0, normalFromObj.length - colDistance) / (colDistance*prec - colDistance)) * (1.01 - Math.max(0, me.distanceTo(obj) - 2*colDistance) / 1000)
+    }
+    else {
+      new Vector(0,0)
+    }
+  }
+
+
+  def timeToArrivalForStick(hock: Hockeyist, target: Point) = {
+    hock.timeToGetPuck = if (hock.distanceTo(target) <= game.stickLength+5) {
+      hock.timeToGetPuckStat = "just turn"
+      timeToTurn(hock, target, game.stickSector/2)
+    }
+    else {
+      if (Math.abs(hock.angleTo(target.x, target.y)) < toRadians(10)) {
+        hock.timeToGetPuckStat = "go directly"
+        timeToArrivalDirect(hock, ((hock.point -> target) - game.stickLength)(hock.point), hock.realSpeedup())
+      }
+      else {
+        hock.timeToGetPuckStat = "go and turn"
+        val tturn = timeToTurn(hock, target, game.stickSector/4)
+        //here I do not substract game.stickLength as actually enemy will spend more time - as during turn he will loose speed
+        val ttarrival = timeToArrivalDirect(hock, target, hock.realSpeedup())
+        tturn + ttarrival
+      }
+    }
+    hock.timeToGetPuck
+  }
+
+  def timeToTurn(hock: Hockeyist, target: Point, sector: Double = 0) = {
+    ticksForTurn(hock, Math.max(0, Math.abs(hock.angleTo(target.x, target.y)) - sector))
+  }
+
+  def timeToArrivalDirect(hock: ModelUnit, target: Point, acceleration: Double = 0) = {
     val calculate = targetAfterCalculator(hock, acceleration)
-    val baseEst = estimate - 5
-    val base = calculate(0, baseEst)
-    (1 to 10)
-      .map(d => (baseEst + d, calculate(0, baseEst + d)))
-      .map(p => (p._1, target.distanceTo(p._2)))
-      .sortBy(f=>f._2).head._1
+    val targetDistance = hock.distanceTo(target)
+
+    def adjust(estimate: Double, attempts: Int = 10): Double = {
+//      println(s"$attempts: $estimate")
+      if (attempts == 0) return estimate
+      val dist = calculate(0, estimate.toLong).distanceTo(hock)
+      val newEst = (estimate * targetDistance / dist).toLong
+      if (Math.abs(newEst - estimate) < 0.5)
+        newEst
+      else
+        adjust(newEst, attempts - 1)
+    }
+
+    adjust(50)
   }
 
   val angularSpeedK = 0.97
@@ -62,7 +148,9 @@ object Physics {
 
   def angularSpeedAfter(as: Double, time: Long) = as * pow(angularSpeedK, time)
 
-  def angleAfter(as: Double, time: Long) = integ(0, time, as * pow(angularSpeedK, _) / logAngularSpeedK)
+  def angleAfter(as: Double, time: Long) = {
+    integ(0, time, as * pow(angularSpeedK, _) / logAngularSpeedK)
+  }
 
   def velocityAfter(hock: ModelUnit, time: Long, acceleration: Double = 0) = {
     hock.velocity * pow(hock.brakeK, time) + acceleration*time
@@ -75,9 +163,9 @@ object Physics {
     val logk = realActor.logBrakeK
     val fullAccel = /*realActor.realSpeedupToVelocityDirection * */ acceleration
     (timeFrom: Long, timeTo: Long) => {
-      val distanceWoAcceleration = integ(timeTo, timeFrom, v0*pow(k,_)/logk)
+      val distanceWoAcceleration = integ(timeFrom, timeTo, v0*pow(k,_)/logk)
       val accelDistance = if (fullAccel == 0) 0 else {
-        integ(timeTo, timeFrom, t => fullAccel / k / logk * (pow(k, t) / logk - t))
+        integ(timeFrom, timeTo, t => fullAccel / k / logk * (pow(k, t) / logk - t))
       }
       val totalDistance = distanceWoAcceleration + accelDistance
       val targetPoint = realActor.velocityVector(totalDistance)(hock)
