@@ -60,12 +60,12 @@ object Physics {
     val dot = mover2target.normal * (who.point -> mover.point)
     val distance = mover2target.distanceTo(who)
 
-    if (dot > 0.7 && distance <= who.radius*1.5) {
+    if (dot > 0.7 && distance <= who.radius*3) {//TODO: magic 3 (means enemy + some area around, shall be stickLength I think)
       //same line, following
       Following
 
     }
-    else if (dot < -0.7 && distance <= who.radius*1.5) {
+    else if (dot < -0.7 && distance <= who.radius*3) {
       //same line, before/between
       if ((who.point->target) * mover2target.normal > 0.7)
         OnWay
@@ -100,25 +100,50 @@ object Physics {
   }
 
 
-  def timeToArrivalForStick(hock: Hockeyist, target: Point) = {
-    hock.timeToGetPuck = if (hock.distanceTo(target) <= game.stickLength+5) {
-      hock.timeToGetPuckStat = "just turn"
+  def timeToArrivalForStick_movingTarget(hock: Hockeyist, target: Point, mover: ModelUnit) = {
+    //if in same direction - *2 (1)
+    //if toward - /2  (-1)
+    timeToArrivalForStick(hock, target) * Math.pow(2, (hock.point->target).normal_*(mover.velocityVector))
+  }
+
+  def timeToArrivalForStick_enough(hock: Hockeyist, target: Point, timelimit: Double): Boolean = {
+    if (hock.distanceTo(target) <= game.stickLength+5) {
+      timeToTurn(hock, target, game.stickSector/2) < timelimit
+    }
+    else {
+      if (Math.abs(hock.angleTo(target.x, target.y)) < toRadians(10)) {
+        hock.distanceTo(targetAfter(hock, timelimit.toLong, acceleration = true)) >= (hock.point.distanceTo(target))
+      }
+      else {
+        hock.distanceTo(targetAfter(hock, timelimit.toLong - timeToTurn(hock, target, game.stickSector/2).toLong , acceleration = true)) >= (hock.point.distanceTo(target))
+      }
+    }
+  }
+
+  def timeToArrivalForStick(hock: Hockeyist, target: Point, log: Boolean = false) = {
+    var t = if (hock.distanceTo(target) <= game.stickLength+5) {
+      if (log) hock.timeToGetPuckStat = "just turn"
       timeToTurn(hock, target, game.stickSector/2)
     }
     else {
       if (Math.abs(hock.angleTo(target.x, target.y)) < toRadians(10)) {
-        hock.timeToGetPuckStat = "go directly"
+        if (log) hock.timeToGetPuckStat = "go directly"
         timeToArrivalDirect(hock, ((hock.point -> target) - game.stickLength)(hock.point), hock.realSpeedup())
       }
       else {
-        hock.timeToGetPuckStat = "go and turn"
-        val tturn = timeToTurn(hock, target, game.stickSector/4)
-        //here I do not substract game.stickLength as actually enemy will spend more time - as during turn he will loose speed
-        val ttarrival = timeToArrivalDirect(hock, target, hock.realSpeedup())
+        if (log) hock.timeToGetPuckStat = "go and turn"
+        val tturn = timeToTurn(hock, target, game.stickSector/2)
+        //TODO: fail here I do not substract game.stickLength as actually enemy will spend more time - as during turn he will loose speed
+        val ttarrival = timeToArrivalDirect(hock, ((hock.point -> target) - game.stickLength)(hock.point), hock.realSpeedup())
         tturn + ttarrival
       }
     }
-    hock.timeToGetPuck
+    if (hock.remainingCooldownTicks > t) {
+      t = hock.remainingCooldownTicks
+      if (log) hock.timeToGetPuckStat + " (after cooldown)"
+    }
+    if (log) hock.timeToGetPuck = t
+    t
   }
 
   def timeToTurn(hock: Hockeyist, target: Point, sector: Double = 0) = {

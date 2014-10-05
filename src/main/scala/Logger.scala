@@ -95,6 +95,7 @@ object Logger {
     renderTable("time to puck", hockeyist.timeToGetPuck)
     renderTable("time to puck stat", hockeyist.timeToGetPuckStat)
     renderTable("angle", hockeyist.angle)
+    renderTable("dist to walls", Mover.distanceToWalls(hockeyist))
     if (hockeyist.moveVector_enemy != null) renderTable("enemy_vector", hockeyist.moveVector_enemy.length)
     renderer.write("[null,null]]")
     renderer.write("\n},")
@@ -152,6 +153,9 @@ object Logger {
       for (p <- hock.targetPoints) {
         renderTargetPoint(hock, p)
       }
+      for (a <- hock.passZones) {
+        renderArea("pass", a._1, a._2)
+      }
     }
     if (world.tick == 0) {
       renderDangerAreas()
@@ -167,11 +171,15 @@ object Logger {
     renderer.flush()
   }
 
-  def renderArea(name: String, area: Rectangle): Unit = {
+  def renderArea(name: String, area: Rectangle, table: String = null): Unit = {
     renderer.write(s"\n{type: 'area', name: '$name', klass: '$name', points: [")
     area.borderPoints.foreach(p => renderer.write(s"[${p.x}, ${p.y}],"))
     area.targetPoints.foreach(p => renderer.write(s"[${p.x}, ${p.y}],"))
+    Array(area.middle).foreach(p => renderer.write(s"[${p.x}, ${p.y}],"))
     renderer.write("[]]")
+    if (table != null) {
+      renderer.write(s",table:[['info','${table.replaceAll("[\n\r]", "")}']]")
+    }
     renderer.write("},")
 
   }
@@ -187,7 +195,7 @@ object Logger {
     renderer.write("[]]")
     renderer.write("},")
     renderer.write("\n{type: 'area', name: 'danger', klass: 'our_danger', points: [")
-    WorldEx.myZone.danger20.borderPoints.foreach(p => renderer.write(s"[${p.x}, ${p.y}],"))
+    WorldEx.myZone.danger(20).borderPoints.foreach(p => renderer.write(s"[${p.x}, ${p.y}],"))
     renderer.write("[]]")
     renderer.write("},")
     renderArea("speedup1", WorldEx.myZone.speedupZone1Top)

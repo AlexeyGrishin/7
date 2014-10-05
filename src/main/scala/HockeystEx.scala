@@ -31,6 +31,8 @@ class HockeystEx(var hockeyist: Hockeyist) {
     inZone = false
     nextZone = null
     strikePoint = null
+    passZones = List()
+    Passer.passTarget = null
   }
 
   var moveVector: Vector = null
@@ -43,6 +45,8 @@ class HockeystEx(var hockeyist: Hockeyist) {
   var startedTurning: Boolean = false
   var inZone: Boolean = false
   var justAdjusted: Boolean = false
+
+  var passZones: List[(Rectangle, String)] = List()
 
   var nextZone: Zone = null
   var strikePoint: StrikePoint = null

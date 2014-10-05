@@ -26,7 +26,7 @@ object Roles {
     }
   }
 
-  def enemyFreePoint = {
+  /*def enemyFreePoint = {
     val enemies = world.hockeyists.filter(_.isMoveableEnemy)
     val sumPoint = enemies.map(_.point).foldLeft(new Point(0,0))((a,b) => new Point(a.x + b.x, a.y + b.y))
     val middlePoint = new Point(sumPoint.x / enemies.length, sumPoint.y / enemies.length)
@@ -37,7 +37,7 @@ object Roles {
     else {
       free1
     }
-  }
+  }*/
 
   object DoDefence extends Role {
     override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
@@ -46,18 +46,11 @@ object Roles {
       val net = WorldEx.myZone.net
       val enemyWithPuck = world.hockeyists.find(h => h.isMoveableEnemy && h.ownPuck)
       if (self.ownPuck) {
-        var freePoint = enemyFreePoint
+        var freePoint = Passer.findIdealForPass(self)
+        Passer.passTarget = freePoint
         self.targetPoints = List(freePoint)
-        //val ally = world.hockeyists.filter(_.isMoveableOur).filter(_.id != self.id).sortBy(h => Math.abs(self.angleTo(h))).head
         lastStatus += "pass puck to area free of enemies"
-        if (self.remainingCooldownTicks > 0 || puckWillGoToOurNetAfterStrike(self)) {
-          Mover.doTurn(self, freePoint, move)
-        }
-        else {
-          move.action = Pass
-          move.passPower = 1.0
-          move.passAngle = self.angleTo(freePoint.x, freePoint.y)
-        }
+        Passer.doPass(self, move)
         return
       }
 
@@ -138,15 +131,15 @@ object Roles {
         return
       }
 
-      val pointAfterSomeTime = Physics.targetAfter(enemyWithPuck, 250, acceleration = true)
-      enemyWithPuck.targetPoints = List(pointAfterSomeTime)
-      val enemyIsGoingToUs = WorldEx.myZone.half.includes(enemyWithPuck) || (enemyWithPuck.velocity > 1 && Math.signum(enemyWithPuck.speedX) == WorldEx.myZone.dx && WorldEx.myZone.half.includes(pointAfterSomeTime))
+      //val pointAfterSomeTime = Physics.targetAfter(enemyWithPuck, 250, acceleration = true)
+      //enemyWithPuck.targetPoints = List(pointAfterSomeTime)
+      val enemyIsGoingToUs = WorldEx.myZone.half.includes(enemyWithPuck) || (enemyWithPuck.velocity > 1 && Math.signum(enemyWithPuck.speedX) == WorldEx.myZone.dx /*&& WorldEx.myZone.half.includes(pointAfterSomeTime)*/)
       if (enemyIsGoingToUs) {
         lastStatus = "enemy is going to us. intersect it\n"
-        val nearestDangerZonePoint = WorldEx.myZone.danger20.nearestTo(enemyWithPuck).toList.sortBy(p => enemyWithPuck.velocityVector normal_* (enemyWithPuck -> p)).reverse.head
+        val nearestDangerZonePoint = WorldEx.myZone.danger(22).nearestTo(enemyWithPuck).toList.sortBy(p => enemyWithPuck.velocityVector normal_* (enemyWithPuck -> p)).reverse.head
         lastStatus += s"we are: ${Physics.positionRelativeOf(self, enemyWithPuck, nearestDangerZonePoint)}\n"
         enemyWithPuck.targetPoints = nearestDangerZonePoint :: self.targetPoints
-        if (WorldEx.myZone.danger20.includes(self) || WorldEx.myZone.danger20.includes(enemyWithPuck) || WorldEx.myZone.danger20.includes(world.puck) || nearestDangerZonePoint.distanceTo(enemyWithPuck) < 50) {
+        if (WorldEx.myZone.danger(22).includes(self) || WorldEx.myZone.danger(22).includes(enemyWithPuck) || WorldEx.myZone.danger(22).includes(world.puck) || nearestDangerZonePoint.distanceTo(enemyWithPuck) < 50) {
           lastStatus += "enemy is here\n"
           KickAsses.move(self, world, game, move)
           lastStatus += KickAsses.lastStatus
@@ -189,8 +182,8 @@ object Roles {
     override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
       if (isPuckOwnedByOur) {
         //do nothing just wait
-        lastStatus = "owned by us, wait"
-        Mover.doMove2(self, self.point -> enemyFreePoint, move)
+        lastStatus = s"owned by us, going to pass it to ${Passer.passTarget}"
+        Mover.doMove2(self, self.point -> Option(Passer.passTarget).getOrElse(Passer.findIdealForPass(puckOwner.get)), move)
         return
       }
       if (isPuckOwnedByEnemy && self.canOwnPuck) {
@@ -250,35 +243,17 @@ object Roles {
       }
       lastStatus = ""
       //else
-      Mover.arriveFor(self, enemyClosestToPuck, move)
-    }
-  }
-
-  object MakeGoalAlone extends Role {
-    override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
-      lastStatus = ""
-      world.hockeyists.filter(_.isMoveableEnemy).foreach(h => {
-        lastStatus += s"${h.id} is: ${Physics.positionRelativeOf(h, self, (self.velocityVector*10)(self))}\n"
-        lastStatus += s"${h.id} will take puck: ${Physics.timeToArrivalForStick(h, world.puck)}\n"
-      })
-
-
-      if (!self.ownPuck)
-      {
-        lastStatus += "puck is not mine O_o\n"
-        LookupForPuck.move(self, world, game, move)
-        lastStatus += LookupForPuck.lastStatus
-        return
-      }
-      if (Mover.arriveToZone(self, WorldEx.enemyZone.defaultDangerZone, move, s => lastStatus += s + "\n")) {
-        lastStatus += "done, ready to strike"
-        move.action = Strike
+      if (self.remainingCooldownTicks == 0 || !isPuckOwnedByOur) {
+        Mover.doMove2(self, self.point->enemyClosestToPuck.point, move)
       }
       else {
-        lastStatus += "still arriving to zone\n"
+        lastStatus += "\ncooldown - go to our friend"
+        Mover.doMove2(self, self.point->puckOwner.get.point, move)
       }
+      //Mover.arriveFor(self, enemyClosestToPuck, move)
     }
   }
+
 
   object MakeGoal2 extends Role {
     override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
@@ -293,7 +268,14 @@ object Roles {
 
       val expectedZone = self.nextZone
       lastStatus = ""
+      val enemiesThatCouldBother = world.hockeyists.filter(_.isMoveableEnemy).filter(_.remainingCooldownTicks == 0)
+      val enemiesArrivalToPuck = (
+        enemiesThatCouldBother.map(e => Physics.timeToArrivalForStick_movingTarget(e, world.puck, self))
+          ++ List(999.0)
+        ).min
 
+      val passTarget = Passer.findIdealForPass(self)
+      val passTurnTime = Passer.timeBeforePass(self, passTarget)
 
       if (expectedZone == null || expectedZone.includes(self)) {
         val zoneName = if (inCentralZone) "center" else if (inZone0) "zone0" else if (inZone1) "zone1" else if (inEnemyCorner) "enemy corner" else "enemy danger"
@@ -323,9 +305,7 @@ object Roles {
               null
             case Mover.Canceled =>
               //pass to defencer
-              move.passAngle = self.angleTo(WorldEx.myZone.net.middle.x, WorldEx.myZone.net.middle.y)
-              move.passPower = 1
-              move.action = Pass
+              Passer.doPass(self, move)
               null
           }
 
@@ -346,6 +326,16 @@ object Roles {
         Mover.doMoveThroughZone(self, expectedZone, move, false, appender)
       }
 
+      if (self.nextZone != null) {
+        //we are moving. check enemies arrival
+        lastStatus += s"still moving. check time (ea = $enemiesArrivalToPuck, pt = $passTurnTime)\n"
+        if (enemiesArrivalToPuck - passTurnTime < 10 && self.remainingCooldownTicks < enemiesArrivalToPuck) {
+          lastStatus += "time to pass...but i will not :)\n"
+          //Passer.doPass(self, move)
+        }
+
+
+      }
 
     }
   }

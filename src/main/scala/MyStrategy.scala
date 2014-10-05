@@ -20,6 +20,9 @@ final class MyStrategy extends Strategy {
     WorldEx(world, game, self)
     Trainer(world, game)
     Logger.doLog(world)
+    world.hockeyists.foreach(h => {
+      Physics.timeToArrivalForStick(h, world.puck, true)
+    })
     if (self.state != Resting)
       self.role.move(self, world, game, move)
 

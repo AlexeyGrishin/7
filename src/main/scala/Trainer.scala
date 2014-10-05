@@ -98,6 +98,9 @@ object Trainer {
           withoutPuck.foreach(_.role = Roles.KickAsses)
           defencer.role = Roles.DoDefence
         }
+        else {
+          withoutPuck.foreach(_.role = Roles.LookupForPuck)
+        }
       case GameState(Enemy, _, _) =>
         attacker.role = Roles.LookupForPuck
         helper.role = Roles.PreventStrike

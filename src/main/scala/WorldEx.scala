@@ -28,15 +28,10 @@ object WorldEx {
     //if (this.h == null || this.h.id == h.id) this.h = h
   }
 
-  lazy val danger16= DangerArea.calculatePoints(world, game, puckSpeed = 16)
-  lazy val dangerLeft16 = danger16.map(p => Seq(p.toLeft.toTop, p.toLeft.toBottom)).flatten
-  lazy val dangerRight16 = danger16.map(p => Seq(p.toRight.toTop, p.toRight.toBottom)).flatten
-  lazy val danger15= DangerArea.calculatePoints(world, game, puckSpeed = 15)
-  lazy val dangerLeft15 = danger15.map(p => Seq(p.toLeft.toTop, p.toLeft.toBottom)).flatten
-  lazy val dangerRight15 = danger15.map(p => Seq(p.toRight.toTop, p.toRight.toBottom)).flatten
-  lazy val danger20= DangerArea.calculatePoints(world, game, puckSpeed = 20)  //TODO: rename :)
-  lazy val dangerLeft20 = danger20.map(p => Seq(p.toLeft.toTop, p.toLeft.toBottom)).flatten
-  lazy val dangerRight20 = danger20.map(p => Seq(p.toRight.toTop, p.toRight.toBottom)).flatten
+  lazy val dangersBySpeed: Map[Int, Array[Point]] = (15 to 26).map(
+    s => s -> DangerArea.calculatePoints(world, game, puckSpeed = s)
+  ).toMap
+
 
   def isPuckOwnedBy(hock: Hockeyist) = world.puck.ownerHockeyistId.contains(hock.id)
 
@@ -47,13 +42,20 @@ object WorldEx {
   def isPuckOwnedByOur = world.puck.ownerPlayerId.contains(world.myPlayer.get.id)
   def isPuckOwnedByEnemy = world.puck.ownerPlayerId.contains(world.opponentPlayer.get.id)
 
+  def puckOwner = world.hockeyists.find(_.ownPuck)
+
   val goalieR = 30.0
 
   lazy val leftZone = new PlayerZone(
     new Rectangle(new Point(0, 0), new Point(Geometry.middleX, Geometry.height)),
-    new PointSpecZone(dangerLeft16),
-    new PointSpecZone(dangerLeft20),
-    new PointSpecZone(dangerLeft15),
+    dangersBySpeed.map(
+      pair =>
+        pair._1 -> new PointSpecZone(
+          pair._2.toList.map(
+            p => List[Point](p.toLeft.toTop, p.toLeft.toBottom)
+          ).flatten
+        )
+    ),
     DangerArea.targetPoint(world, game).toLeft,
     new Rectangle(
       new Point(game.rinkLeft + goalieR*2.5, game.goalNetTop + game.goalNetHeight/2 - goalieR),
@@ -66,9 +68,7 @@ object WorldEx {
 
   lazy val rightZone = new PlayerZone(
     new Rectangle(new Point(Geometry.middleX, 0), new Point(Geometry.width, Geometry.height)),
-    new PointSpecZone(dangerRight16),
-    new PointSpecZone(dangerRight20),
-    new PointSpecZone(dangerRight15),
+    dangersBySpeed.map(pair => pair._1 -> new PointSpecZone(pair._2.toList.map(p => Seq(p.toRight.toTop, p.toRight.toBottom)).flatten)),
     DangerArea.targetPoint(world, game).toRight,
     new Rectangle(
       new Point(game.rinkRight - goalieR*2.5, game.goalNetTop + game.goalNetHeight/2 - goalieR),
@@ -80,17 +80,18 @@ object WorldEx {
 
   )
 
+
+
   class PlayerZone(val half: Zone,
-                   val danger16: PointSpecZone,
-                   val danger20: PointSpecZone,
-                   val danger15: PointSpecZone,
+                   val dangerBySpeed: Map[Int, PointSpecZone],
                    target: Point,
                    val net: Rectangle,
                    speedupZone1: Rectangle,
                    speedupZone2: Rectangle,
                    val start: Rectangle
                     ) {
-    def needSwingWhenStrikeFrom(point: Point) = !danger16.includes(point)
+
+    def danger(speed: Int) = dangerBySpeed(speed)
 
     val targetTop: Point = target.toTop
     val targetBottom: Point = target.toBottom
@@ -103,13 +104,10 @@ object WorldEx {
 
     assert(half.includes(targetBottom))
     assert(half.includes(targetTop))
-    danger15.selfcheck()
-    danger20.selfcheck()
-    danger16.selfcheck()
 
     val dx = signum(net.cornerPoints.head.x - Geometry.middleX)
 
-    val defaultDangerZone = danger16
+    val defaultDangerZone = danger(20)
   }
   lazy val weOnRight = world.myPlayer.get.netRight > Geometry.middleX
 
@@ -133,7 +131,7 @@ object WorldEx {
       case _ => 0.0
     }
     def realSpeedupToVelocityDirection = m match {
-      case h: Hockeyist => if (h.lookVector.normal_*(velocityVector) > 0.8) realSpeedup() else 0
+      case h: Hockeyist => if (h.lookVector.normal_*(velocityVector) > 0.8) realSpeedup() else 0.0
       case _ => 0.0
     }
     val brakeK = m match {
