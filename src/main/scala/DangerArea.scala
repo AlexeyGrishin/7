@@ -3,8 +3,12 @@ import model.{Game, World}
 
 import scala.collection.mutable.ListBuffer
 
+/**
+ * Содержит расчеты точек/областей связанных с забиванием голов
+ */
 object DangerArea {
 
+  //точка в которую мы целимся.
   def targetPoint(world: World, game: Game, gap: Int = 5) = {
     val xnet = game.goalNetWidth
     val ynet = game.goalNetTop
@@ -18,6 +22,8 @@ object DangerArea {
   val unitRadius = 30
   val unitPad = 15
 
+  //первая зона "разгона". нападающий едет в нее, потом в зону 2, и оттуда - в "опасмную зону", откуда можно пулять
+  //сделано для того чтобы скорость была максимальной и удар шел от борта.
   def speedupZone1(world: World, game: Game) = {
     new Rectangle(
       new Point(Geometry.middleX - 300, game.rinkTop + unitPad),
@@ -40,6 +46,7 @@ object DangerArea {
     )
   }
 
+  //собственно расчет точек из которых можно успешно забить шайбу при указанной скорости.
   def calculatePoints(world: World, game: Game, step: Int = 25, puckSpeed: Double = 16, gap: Int = 5) = {
     val points = new ListBuffer[Point]
     val xnet = game.goalNetWidth

@@ -1,5 +1,6 @@
 import model.{Unit => ModelUnit}
 
+//Все что связано с геометрией
 object Geometry {
   import StrictMath._
   def toDeg(rad: Double): Double = {
@@ -26,14 +27,9 @@ object Geometry {
     distance(unit1, unit2) <= radius
   }
 
+  //класс для точек. содержит так же преобразования относительно центра поля - отзеркаливание влево/вправо и вверх/вниз
   class Point(val x: Double, val y: Double) {
 
-    def withMirrored = Seq(
-      toLeft.toTop,
-      toLeft.toBottom,
-      toRight.toTop,
-      toRight.toBottom
-    )
     def toLeft = new Point(
       if (x < middleX) x else width - x,
       y
@@ -69,7 +65,6 @@ object Geometry {
 
     def distanceTo(p: Point) = Math.hypot(p.x - x, p.y - y)
 
-
     def canEqual(other: Any): Boolean = other.isInstanceOf[Point]
 
     override def equals(other: Any): Boolean = other match {
@@ -93,6 +88,7 @@ object Geometry {
     lazy val length = Math.hypot(dx, dy)
     def *(sc: Double) = new Vector(dx*sc, dy*sc)
 
+    //нормальный вектор, т.е. с длинной = 1
     def normal = if (length == 0) this else new Vector(dx/length, dy/length)
     def +(vec: Vector) = new Vector(dx + vec.dx, dy + vec.dy)
 
@@ -106,6 +102,7 @@ object Geometry {
 
     def orient(from: Point, to: Point) = if (signum(to.x - from.x) != signum(dx)) reverse else this
 
+    //вектор нормали (ортогональный), т.е. перпендикулярный
     def ort = new Vector(dy, -dx)
 
     def /=(coef: Double) = if (length == 0) this else apply(coef / length)
@@ -129,6 +126,7 @@ object Geometry {
     def toLine(from: Point) = new Line(this, from)
   }
 
+  //линия здесь - это такой вектор идущий из определенной точки
   class Line(vector: Vector, val begin: Point) {
     def this(from: Point, to: Point) = this(from->to, from)
     val normal = vector.normal
@@ -155,6 +153,7 @@ object Geometry {
 
 
 
+  //типа область поля. бывает прямоугольная и ограниченная кучей точек. тоже может зеркалиться относительно центра поля
   trait Zone {
     def includes(p: Point): Boolean
     def toTop: Zone

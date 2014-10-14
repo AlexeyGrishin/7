@@ -4,6 +4,7 @@ import model.Hockeyist
 import model.{Unit => ModelUnit}
 import StrictMath._
 
+//учет физики - расстояния,времена и пр.
 object Physics {
   //hockeist:
   //    agility = 0.75*agility + 0.25*(stamina/2000)*agility
@@ -37,11 +38,13 @@ object Physics {
     relativeAngleTo
   }
 
+  //время на поворот
   def ticksForTurn(hock: Hockeyist, turnFor: Double) = {
     //val delta = angleDiff(hock.angle, turnFor)
     Math.ceil(Math.abs(turnFor) / hock.realTurnspeed)
   }
 
+  //вспомогательные методы для расчета интеграла
   def integ(to: Double, ifn: (Double) => Double) = ifn(to) - ifn(0)
   def integ(from: Double, to: Double, ifn: (Double) => Double) = ifn(to) - ifn(from)
 
@@ -55,6 +58,7 @@ object Physics {
   /// mover ---> target <--- who    Intersect
 
 
+  //попытка понять положение относительно врага. толком не испольуется, не доведено до ума
   def positionRelativeOf(who: Hockeyist, mover: Hockeyist, target: Point) = {
     val mover2target = new Line(mover.point, target)
     val dot = mover2target.normal * (who.point -> mover.point)
@@ -84,6 +88,7 @@ object Physics {
 
   //rturn vector len = 1 - directly on way < radius*prec, ~0 - > radius*prec
   //                 = 1 - distance <= radius*prec * 2, ~0 - distance is ~1000
+  //используется для избегания встречи с препятсвием. работает хз как
   def getAvoidanceVector(me: Hockeyist, vector: Vector, maxDistance: Double, obj: ModelUnit, prec: Double = 1.5) = {
     val line = vector.toLine(me.point)
     val normalFromObj = line.ortVector(obj)
@@ -100,26 +105,10 @@ object Physics {
   }
 
 
-  def timeToArrivalForStick_movingTarget(hock: Hockeyist, target: Point, mover: ModelUnit) = {
-    //if in same direction - *2 (1)
-    //if toward - /2  (-1)
-    timeToArrivalForStick(hock, target) * Math.pow(2, (hock.point->target).normal_*(mover.velocityVector))
-  }
 
-  def timeToArrivalForStick_enough(hock: Hockeyist, target: Point, timelimit: Double): Boolean = {
-    if (hock.distanceTo(target) <= game.stickLength+5) {
-      timeToTurn(hock, target, game.stickSector/2) < timelimit
-    }
-    else {
-      if (Math.abs(hock.angleTo(target.x, target.y)) < toRadians(10)) {
-        hock.distanceTo(targetAfter(hock, timelimit.toLong, acceleration = true)) >= (hock.point.distanceTo(target))
-      }
-      else {
-        hock.distanceTo(targetAfter(hock, timelimit.toLong - timeToTurn(hock, target, game.stickSector/2).toLong , acceleration = true)) >= (hock.point.distanceTo(target))
-      }
-    }
-  }
 
+  //приблизительное время для добирания хокеиста к указанной точке на расстояние "клюшки". считает отдельно поворот и перемещение по прямой.
+  //в реале конечно время будет другое, неточный метод. но судя по логам довольно неплохо работает при анализе того как скоро враг доедет до шайбы. жаль не нашел как применить
   def timeToArrivalForStick(hock: Hockeyist, target: Point, log: Boolean = false) = {
     var t = if (hock.distanceTo(target) <= game.stickLength+5) {
       if (log) hock.timeToGetPuckStat = "just turn"
@@ -146,10 +135,34 @@ object Physics {
     t
   }
 
+  //то же что выше, но оцента с учетом движения цели. ну типа если едет навстречу,то 1/2, а если едет в ту же сторону, то *2.
+  def timeToArrivalForStick_movingTarget(hock: Hockeyist, target: Point, mover: ModelUnit) = {
+    //if in same direction - *2 (1)
+    //if toward - /2  (-1)
+    timeToArrivalForStick(hock, target) * Math.pow(2, (hock.point->target).normal_*(mover.velocityVector))
+  }
+
+  //то же, что выше, но чисто проверяет хватит ли указанного времени. испоьзуется чтобы понять - успеем замахнуться или нет
+  def timeToArrivalForStick_enough(hock: Hockeyist, target: Point, timelimit: Double): Boolean = {
+    if (hock.distanceTo(target) <= game.stickLength+5) {
+      timeToTurn(hock, target, game.stickSector/2) < timelimit
+    }
+    else {
+      if (Math.abs(hock.angleTo(target.x, target.y)) < toRadians(10)) {
+        hock.distanceTo(targetAfter(hock, timelimit.toLong, acceleration = true)) >= (hock.point.distanceTo(target))
+      }
+      else {
+        hock.distanceTo(targetAfter(hock, timelimit.toLong - timeToTurn(hock, target, game.stickSector/2).toLong , acceleration = true)) >= (hock.point.distanceTo(target))
+      }
+    }
+  }
+
+  //время на поворот к цели
   def timeToTurn(hock: Hockeyist, target: Point, sector: Double = 0) = {
     ticksForTurn(hock, Math.max(0, Math.abs(hock.angleTo(target.x, target.y)) - sector))
   }
 
+  //время на достижение цели при движении по прямой.
   def timeToArrivalDirect(hock: ModelUnit, target: Point, acceleration: Double = 0) = {
     val calculate = targetAfterCalculator(hock, acceleration)
     val targetDistance = hock.distanceTo(target)
@@ -171,16 +184,25 @@ object Physics {
   val angularSpeedK = 0.97
   val logAngularSpeedK = log(angularSpeedK)
 
+  //как поменяется angular speed по времени
   def angularSpeedAfter(as: Double, time: Long) = as * pow(angularSpeedK, time)
 
+  //угол на который повернет хокеиста с учетом angular speed через указанное время
+  //используется когда собираемся атаковать - чтобы учесть при повороте.
+  //интеграл
   def angleAfter(as: Double, time: Long) = {
     integ(0, time, as * pow(angularSpeedK, _) / logAngularSpeedK)
   }
 
+  //скорость через указанное время с учетом указанного ускорения
   def velocityAfter(hock: ModelUnit, time: Long, acceleration: Double = 0) = {
     hock.velocity * pow(hock.brakeK, time) + acceleration*time
   }
 
+  //возвращает функцию, которая посчитает где будет объект через указанное время
+  //пытается учитывать отскок (только 1 и только от стен)
+  //используется во всех других подсчетах
+  //интегралы
   def targetAfterCalculator(hock: ModelUnit, acceleration: Double = 0, analyzeColision: Boolean = false) = {
     val realActor = hock.realActor
     val v0 = realActor.velocity
@@ -212,12 +234,14 @@ object Physics {
     }
   }
 
+  //собственно рассчитывает где окажется объект через указанное время с учетом ускорения
   def targetAfter(hock: ModelUnit, time: Long, acceleration: Boolean = false, analyzeColision: Boolean = true) = {
     targetAfterCalculator(hock, if (acceleration) hock.realActor.realSpeedupToVelocityDirection else 0, analyzeColision)(0, time)
   }
 
   lazy val g = WorldEx.game
 
+  //типа считает отражение от бортов. неправильно считает, но для приближения хватало
   def mirrorAt(v: Geometry.Vector, p: Point) = {
     if (p.x == g.rinkLeft || p.x == g.rinkRight) {
       new Vector(-v.dx, v.dy)
@@ -232,6 +256,7 @@ object Physics {
     point.x >= g.rinkLeft && point.x <= g.rinkRight && point.y >= g.rinkTop && point.y <= g.rinkBottom
   }
 
+  //ищет точку столкновения со стеной
   def getCollisionWithWall(origin: Point, vector: Geometry.Vector): Point = {
     if (vector.length == 0) return null
     var xtop: Double = 0
@@ -268,13 +293,6 @@ object Physics {
       new Point(g.rinkRight, yright)).map(checkMatch).flatten.headOption.orNull
 
   }
-
-
-  //1. развернуться, поехать
-  //    60 тиков
-  //    через, скажем, 30 тиков - пройдем 40 поинтов
-  //2. поехать назад, развернуться на ходу, поехать
-  //    20 тиков, разворот 44 тика - и уже доедем
 
 
 }

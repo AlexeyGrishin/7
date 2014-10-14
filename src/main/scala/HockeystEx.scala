@@ -7,6 +7,16 @@ import model.HockeyistState.{Resting, Swinging, KnockedDown}
 import model.HockeyistType.Goalie
 import model.{ActionType, Move, Hockeyist}
 
+
+/**
+ * класс-расширение для хокеиста. содержит всякие доп. поля (в основном - для логирования) и методы.
+ * важный атрибут - role. определяет поведение хокеиста.
+ *
+ * хокеисты практически не хранят данные между ходами, принимая решение на каждом тике. возможно это была плохая идея
+ * исключение: забивание голов, тут приходится хранить точку из которой планируется произвести забивание, дабы подкатить к ней с замахом
+ *
+ * @param hockeyist
+ */
 class HockeystEx(var hockeyist: Hockeyist) {
 
   import WorldEx._
@@ -145,9 +155,5 @@ class HockeystEx(var hockeyist: Hockeyist) {
   def agilityCoef = agility / 100
 
   def puckSpeedAfterStrike(swingTicks: Double, vel: Double = velocity) = 20 * (0.75 + 0.25*swingTicks / game.maxEffectiveSwingTicks) * strengthCoef + vel*(lookVector normal_* hockeyist.velocityVector)
-
-  //dexterity - хорошо для того кто пинает в ворота
-
-  //dexterity/agility - прибавляет процент для перехвата шайбы
 
 }

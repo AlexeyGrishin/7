@@ -5,6 +5,10 @@ import Geometry._
 import WorldEx._
 import StrictMath._
 
+
+/**
+ * Выполняет всякие перемещения хокеиста - с учетом физики, здравого смысла и пр.
+ */
 object Mover {
 
 
@@ -12,6 +16,10 @@ object Mover {
   val predictDistance = 400
 
 
+
+  /**
+   * Попытка предсказать точку, где пересекутся пути хокеиста и цели. Сносно работает для шайбы, ужасно - для вражеских хокеистов
+   */
   def estimatedRandevousPoint(me: Hockeyist, unit: ModelUnit, limit: Double = game.stickLength) = unit.velocityVector match {
     case NullVector() =>
       unit2point(unit)
@@ -70,6 +78,7 @@ object Mover {
       }
   }
 
+  //максимально приблизиться к цели на длину клюшки. использует estimatedRandevousPoint, поэтому только для шайбы
   def arriveFor(me: Hockeyist, unit: ModelUnit, move: Move, limit: Double = game.stickLength): Unit = {
 
     val estimatedPoint = estimatedRandevousPoint(me, unit, limit)
@@ -85,6 +94,7 @@ object Mover {
   val angleEps = 0.01
   val estimationDelta = 20
 
+  //для защитника - алгоритм "подкатить к воротам и остановиться в них"
   def arriveToNetAndStop(me: Hockeyist, move: Move)(whileBrake: =>Unit): Boolean = {
     val zone = WorldEx.myZone.net
     if (zone.includes(me)) {
@@ -145,6 +155,9 @@ object Mover {
     }
   }
 
+  //смысл этой и следующей функций - найти точку в указанной зоне, где окажется хокеист если перестанет ускоряться
+  //используется для атаки - если мы подъезжае к зоне атаки, то надо прекратить ускорение, чтобы повернуться и замахнуться
+  //надо чтобы в итоге мы оказались в точке откуда можно нанести удар
   def findFirstPointInZone(me: Hockeyist, zone: Zone, onEachPoint: (Point) => Unit): Option[(Point, Long)] = {
     val velocity = me.velocity
     var firstSkiped = false
@@ -175,6 +188,7 @@ object Mover {
     None
   }
 
+  //выполняет поворот к цели с учетом угловой скорости.
   def doTurn(me: Hockeyist, target: Point, move: Move, from: Point = null, ticksLeft: Int = 1): Boolean = {
     val angleAdjustement = Physics.angleAfter(me.angularSpeed, ticksLeft)
     //println(s"${world.tick}: ${me.angleTo(Option(from).getOrElse(me.point), target)} ${angleAdjustement}")
@@ -207,6 +221,8 @@ object Mover {
           measure cooldown
           decision = point + swing/
    */
+  //выполняет движение к "опасной" зоне - зоне атаки. программа-максимум: найти ближайшую точку, прекратить ускорение, начать поворачиваться, замахнуться и ударить.
+  //дальше как пойдет. пытается учитывать близость врагов и, скажем, бить заранее.
   def arriveToStrike2(me: Hockeyist, move: Move, addStatus: (String) => Unit): String = {
     val zoneToStrike20 = WorldEx.enemyZone.danger(20).to(me)
     val zoneToStrike16 = WorldEx.enemyZone.danger(16).to(me)
@@ -380,6 +396,9 @@ object Mover {
     doMove3(me, target, (me.point->target)(100), move, predictCollisionsWeight = 40, turnOutPuck = turnOutPuck)
 
   }
+
+  //общеиспользуемый алгоритм перемещения в указанную точку. пытается сделать это более-менее быстро (ехать назад, замедляться когда надо и пр)
+  //и, кроме того, учитывать столкновения с другими хокеистами
   def doMove3(me: Hockeyist, target: Point,vector: Vector,  move: Move, predictCollisionsWeight: Double = 0.0, turnOutPuck: Boolean = false): Unit = {
     me.moveVector_target = vector
     me.moveVector = vector
@@ -398,6 +417,7 @@ object Mover {
     val angleToTurn = me.angleTo(turnTarget.x, turnTarget.y)
     move.turn = angleToTurn
     //2. turn out puck TODO: does not work
+    //ппоытка реализовать функционал "отворачивать шайбу от врага". провал.
     if (me.ownPuck && turnOutPuck && enemiesCloseToPuck.nonEmpty) {
       val angleDirectCouterEnemy = Math.signum(enemiesCloseToPuck.map(e => -me.angleTo(e)).sum)
       val nearest = enemiesCloseToPuck.map(_.distanceTo(world.puck)).min
@@ -418,6 +438,7 @@ object Mover {
   }
 
 
+  //предыдущая версия, не содержит попыток избежать столкновений. юзается когда это неважно - скажем когда мы просто хотим отпинать врага.
   def doMove2(me: Hockeyist, vector: Vector, move: Move, forceSpeeddown: Boolean = false): Unit = {
     me.moveVector = vector
     val tp = vector(me)
@@ -430,15 +451,10 @@ object Mover {
       move.speedUp = 0;
     }
 
-    /*if (me.ownPuck && world.hockeyists.filter(_.isMoveableEnemy).exists(_.distanceTo(me) < game.stickLength)) {
-      val en = world.hockeyists.filter(_.isMoveableEnemy).find(_.distanceTo(me) < game.stickLength).get
-      val angleToEnemy = me.angleTo(en)
-
-      move.turn = -move.turn
-    }*/
   }
 
 
+  //испльузется для атаки - типа пройти сквозь очередную зону, не сбавляя скорость. пытается избежать столкновения с врагами.
   def doMoveThroughZone(me: Hockeyist, zone: Zone, move: Move, allowChangeDirection: Boolean, report: (String) => Unit) = {
     val zoneTop = zone.toTop
     val zoneBottom = zone.toBottom

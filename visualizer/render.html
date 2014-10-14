@@ -1,0 +1,132 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <link href="res/styles.css" type="text/css" rel="stylesheet">
+    <link href="res/jquery.svg.css" type="text/css" rel="stylesheet">
+    <link href="res/jquery-ui.css" type="text/css" rel="stylesheet">
+    <script src="res/jquery.js"></script>
+    <script src="res/jquery.svg.js"></script>
+    <script src="res/jquery.svgdom.js"></script>
+    <script src="res/jquery-ui.js"></script>
+    <script src="res/renderer.js"></script>
+    <script>
+        var data = [];
+        function add(item) {data.push(item);}
+
+        $(function() {
+            $("#field").find("svg").svg();
+            var svg = $("#field").find("svg").svg('get');
+            var renderer = createRenderer(svg, createPopup($("#popup"), itemToTable));
+
+            var curValue = 0;
+            var showAreas = false;
+
+            function render(step, e) {
+                curValue = step;
+                $("#step").html(step);
+                if (!e) sl.slider("option", "value", step);
+                var item = data[step];
+
+                renderer.render(item.items, showAreas ? data[0] : null);
+                $(".log").html(item.log || "");
+            }
+
+            var sl = $("#slider")  ;
+            sl.slider({min: 0, max: data.length - 1, slide: function(e, ui) {
+                render(ui.value, e);
+            }, change: function(e, ui) {
+                render(ui.value, e);
+            }});
+            $("#right").click(function() { sl.slider("option", "value", sl.slider("option", "value") + 1);});
+            $("#left").click(function() { sl.slider("option", "value", sl.slider("option", "value") - 1);});
+
+            var isPlaying = false;
+            render(curValue);
+            $("#areas").click(function() {
+                showAreas = $("#areas")[0].checked;
+                render(curValue)
+            });
+            $("#play").click(function() {
+                if (isPlaying) {
+                    isPlaying = false;
+                    $(this).html("play")
+                }
+                else {
+                    isPlaying = true;
+                    $(this).html("stop");
+
+                    function oneStep() {
+                        if (!isPlaying) return;
+                        curValue++;
+                        render(curValue);
+                        if (curValue == data.length - 1) {
+                            isPlaying = false;
+                            $("#play").html("play");
+                        }
+                        else {
+                            setTimeout(oneStep, 10);
+                        }
+                    }
+                    oneStep();
+                }
+            })
+        });
+
+    </script>
+</head>
+<body>
+    <div id="field">
+        <button id="left"> &lt; </button>  <label id="step">0</label>         <button id="right"> &gt;</button>
+        | <button id="play"> play</button>   | <label><input type="checkbox" id="areas"> show areas</label>
+        <div id="slider"></div>
+        <svg transform="scale(0.75)" width="900" height="600"></svg>
+        <pre class="log"></pre>
+        <div id="popup">
+            <div class="content">
+
+            </div>
+        </div>
+    </div>
+</body>
+<!--script>
+    add({items: [{
+        name: "our attacker",
+        klass: "our_hock",
+        tag: "attack1",
+        type: "circle",
+        radius: 30,
+        x: 500,
+        y: 400,
+        vectors: [{
+            klass: "vel",
+            dx: 10,
+            dy: 20
+        }, {klass: "look", dx: 35, dy: 0}],
+        vx: 10,
+        vy: 20
+    }, {
+        name: "attacker's target",
+        type: "point",
+        klass: "target",
+        tag: "attack1",
+        x: 600,
+        y: 600
+    }], log: "test\ntest2"});
+    add({items: [{
+        name: "our attacker",
+        klass: "our_hock",
+        tag: "attack1",
+        type: "circle",
+        radius: 20,
+        x: 510,
+        y: 420,
+        vectors: [{
+            klass: "vel",
+            dx: 10,
+            dy: 20
+        }],
+        vx: 10,
+        vy: 20
+    }]});
+</script-->
+</html>

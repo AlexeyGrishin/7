@@ -2,6 +2,7 @@ import model.ActionType.{Strike, TakePuck}
 import model.{Move, Game, World, Hockeyist}
 import WorldEx._
 
+//роль которую выполняет хокеист. см Roles
 trait Role {
   def move(self: Hockeyist, world: World, game: Game, move: Move): Unit
 
@@ -28,6 +29,7 @@ trait Role {
     enemy.isDefined
   }
 
+  //проверка на автогол. если шайба не летит в наши ворота - страйкаем. если летит - пытаемся взять.
   def strikeOrTakeIfCan(self: Hockeyist, move: Move) = if (self.canOwnPuck) {
     if (Roles.puckWillGoToOurNetAfterStrike(self)) {
       lastStatus += "\ntake!"

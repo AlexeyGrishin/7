@@ -1,0 +1,151 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <link href="res/styles.css" type="text/css" rel="stylesheet">
+    <link href="res/jquery.svg.css" type="text/css" rel="stylesheet">
+    <link href="res/jquery-ui.css" type="text/css" rel="stylesheet">
+    <script src="res/jquery.js"></script>
+    <script src="res/jquery.svg.js"></script>
+    <script src="res/jquery.svgdom.js"></script>
+    <script src="res/jquery-ui.js"></script>
+    <script src="res/renderer.js"></script>
+    <script>
+
+
+        function dangerArea(puckV, gap, renderOnly) {
+            var points = [];
+
+            function point(x,y, kls, t) {return {x: x, y: y, klass: "pnt " + kls, type: "point", table: t}}
+
+            var xnet = 65;
+            var ynet = 360;
+            var goalR = 30;
+            var goalD = 30*2;
+            var puckR = 20;
+            var goalV = 6;
+            var netH = 200;
+
+            var endX = 700;
+            var endY = 770;
+
+            var step = 10;
+
+            var targetX = xnet;
+            var targetY = ynet + puckR + gap;
+
+            function hypot(dx, dy) { return Math.sqrt(dx*dx + dy*dy)}
+
+            var calcForGoalMiddle = true;
+
+            function check(x, y, drawall) {
+                var x_before_g_1 = xnet + goalD;
+                var y_before_g_1 = targetY + goalD / (x - targetX) * (y - targetY);
+                if (!calcForGoalMiddle) {
+                    var x_before_g = x_before_g_1;
+                    var y_before_g = y_before_g_1;
+                }
+                else {
+                    var x_before_g = xnet + goalR;
+                    var y_before_g = targetY + goalR / (x - targetX) * (y - targetY);
+
+                }
+                var t_for_puck = hypot(x_before_g - x, y_before_g - y) / puckV;
+                var t_for_puck_1 = hypot(x_before_g_1 - x, y_before_g_1 - y) / puckV;
+                var goalie_min_y = ynet + netH - goalR;
+                var goalie_y = Math.min(y, goalie_min_y);
+                var goalie_t;
+                if (y <= goalie_min_y) {
+                    goalie_t = t_for_puck;
+                    var goalie_t_1 = t_for_puck_1;
+                }
+                else {
+                    goalie_t = t_for_puck * (goalie_min_y - y_before_g) / (y - y_before_g);
+                    var goalie_t_1 = t_for_puck_1 * (goalie_min_y - y_before_g_1) / (y - y_before_g_1);
+                }
+
+                var goalie_y_after_t = goalie_y - goalV*goalie_t;
+                var goalie_y_after_t_1 = goalie_y - goalV*goalie_t_1;
+                var goalie_top = goalie_y_after_t - goalR;
+                var goalie_top_1 = goalie_y_after_t_1 - goalR;
+                var puck_bottom = y_before_g + puckR;
+                var puck_bottom_1 = y_before_g_1 + puckR;
+				
+                var res = goalie_top >= puck_bottom;
+                points.push(point(x, y, res ? "green" : "red", [
+                   ["x_before_g", x_before_g],
+                   ["y_before_g", y_before_g],
+                   ["t_for_puck", t_for_puck],
+                   ["goalie_t", goalie_t],
+                   ["goalie_y", goalie_y],
+                   ["goalie_y_after_t", goalie_y_after_t],
+                   ["goalie_top", goalie_top],
+                   ["puck_bottom", puck_bottom]
+                ]));
+                if (drawall) {
+                    points.push({type: 'circle', radius: puckR,  name: 'puck_t', x: x_before_g, y: y_before_g, klass: "puck"});
+                    points.push({type: 'circle', radius: goalR, name: 'goalie_t', x: xnet + goalR, y: goalie_y_after_t, klass: "enemy_hock"});
+                    points.push({type: 'circle', radius: puckR,  name: 'puck_t_1', x: x_before_g_1, y: y_before_g_1, klass: "puck"});
+                    points.push({type: 'circle', radius: goalR, name: 'goalie_t_1', x: xnet + goalR, y: goalie_y_after_t_1, klass: "enemy_hock"});
+                    points.push({type: 'vector', x: x, y: y, dx: targetX - x, dy: targetY - y, name: "vector"});
+                }
+            }
+
+            if (renderOnly) check(renderOnly.x, renderOnly.y, true); else
+            for (var x = xnet + goalD; x <= endX; x+= step) {
+                for (var y = ynet; y <= endY; y += step) {
+                    check(x,y);
+                }
+            }
+
+
+            return points;
+        }
+
+        $(function() {
+            $("#field").find("svg").svg();
+            var svg = $("#field").find("svg").svg('get');
+            var renderer = createRenderer(svg, createPopup($("#popup"), itemToTable));
+
+            var vel = 16;
+            var gap = 5;
+            function doRender() {
+                renderer.render(dangerArea(vel, gap));
+                $("svg .pnt").click(function() {
+                    renderer.render(dangerArea(vel, gap, {x: parseInt($(this).attr("cx")), y: parseInt($(this).attr("cy"))}));
+                });
+            }
+            $(".velocity").click(function() {
+                vel = parseInt($(this).html());
+                doRender();
+            });
+            $(window).keydown(function(e) {
+                if (e.which == 27) doRender();
+            });
+
+            doRender();
+
+        });
+
+    </script>
+	<style>
+	body {margin: 0}
+	</style>
+</head>
+<body>
+<div id="field">
+    <button class="velocity">20</button>
+    <button class="velocity">16</button>
+    <button class="velocity">15</button>
+    <button class="velocity">14</button>
+    <button class="velocity">12</button>
+    <br>
+    <svg transform1="scale(0.75)" width="900" height="600"></svg>
+    <div id="popup">
+        <div class="content">
+
+        </div>
+    </div>
+</div>
+</body>
+
+</html>

@@ -4,6 +4,11 @@ import model.{Unit => ModelUnit, Hockeyist, World, Game, Move, Puck}
 
 import WorldEx._
 
+/**
+ * Содержит "роли" - функции, которые выполняют хокеисты.
+ * Каждому хокеисту назначается такая роль и вызывается на каждом тике
+ * См Trainer - он назначает роли
+ */
 object Roles {
 
   def puckWillGoToOurNetAfterStrike(self: Hockeyist) = {
@@ -26,19 +31,11 @@ object Roles {
     }
   }
 
-  /*def enemyFreePoint = {
-    val enemies = world.hockeyists.filter(_.isMoveableEnemy)
-    val sumPoint = enemies.map(_.point).foldLeft(new Point(0,0))((a,b) => new Point(a.x + b.x, a.y + b.y))
-    val middlePoint = new Point(sumPoint.x / enemies.length, sumPoint.y / enemies.length)
-    val free1 = if (middlePoint.isBottom) middlePoint.toTop else middlePoint.toBottom
-    if (free1.inNet || Math.abs(free1.y - middlePoint.y) < 100) {
-      if (free1.isLeft) free1.toRight else free1.toLeft
-    }
-    else {
-      free1
-    }
-  }*/
-
+  //Защита. Алгоритм простой: держимся в районе ворот по центру - почти всегда шайба летит там.
+  //Если шайба летит, смотрим куда - если в ворота, то движемся/поворачиваемся к ней и страйкаем
+  //Если явно мимо - забить болт
+  //Если есть возможность взять и нет опасности - пытаемся взять
+  //Если взяли - пасуем подальше от врагов
   object DoDefence extends Role {
     override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
       self.targetPoints = List()
@@ -105,6 +102,7 @@ object Roles {
     }
   }
 
+  //Просто шмаляем во вражеские ворота. Юзается для овертайма когда вратарей нет
   object StrikeToNet extends Role {
     override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
       //overtime - просто едем к воротам и лупим
@@ -119,6 +117,9 @@ object Roles {
     }
   }
 
+  //Пытается перехватить врага с шайбой который едет забивать гол
+  //В идеале должен был учитывать взаимное положение и ехать реально на перехват в зону удара
+  //По факту - едет следом, хорошо если успевает выбить
   object PreventStrike extends Role {
     override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
       if (strikeOrTakeIfCan(self, move)) {
@@ -156,6 +157,7 @@ object Roles {
     }
   }
 
+  //Отладочная роль :)
   object FoolingAround extends Role {
     val pointsToReach = List(WorldEx.enemyZone.net.middle, WorldEx.myZone.net.middle)
     var point: Point = null
@@ -178,6 +180,9 @@ object Roles {
     }
   }
 
+  //Едет за шайбой. Пытается предсказать ее перемещение и перехватить.
+  //Если шайба у союзника - ожидает пас и едет в ту же точку.
+  //Если шайба у врага - выбивает если это неопасно
   object LookupForPuck extends Role {
     override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
       if (isPuckOwnedByOur) {
@@ -220,6 +225,7 @@ object Roles {
 
   }
 
+  //Лупить всех клюшкой :)
   object KickAsses extends Role {
     override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
       val enemyClosestToPuck = world.hockeyists.filter(_.isMoveableEnemy).sortBy(_.distanceTo(world.puck)).head
@@ -255,6 +261,7 @@ object Roles {
   }
 
 
+  //Едет через зоны вдоль корта к "опасной" зоне. Там - см Mover.arriveToStrike2
   object MakeGoal2 extends Role {
     override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = {
 

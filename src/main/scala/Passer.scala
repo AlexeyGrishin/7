@@ -3,6 +3,7 @@ import Geometry._
 import model.ActionType.Pass
 import model.{Move, Hockeyist}
 
+//попытка давать пасы
 object Passer {
 
   lazy val areaSize = game.stickLength
@@ -35,6 +36,7 @@ object Passer {
 
   }
 
+  //идеальной точкой для паса является та, куда не доедут соперники, но доедут наши. работает кривовато, доделать уже не успел.
   def findIdealForPass(me: Hockeyist, log: Boolean = false): Point = {
     me.passZones = List()
     areas.map(area => {

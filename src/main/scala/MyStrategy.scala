@@ -11,28 +11,26 @@ final class MyStrategy extends Strategy {
     val start = System.currentTimeMillis()
     action
     val diff = System.currentTimeMillis() - start
-    //if (Logger.enabled) println(s"$name took $diff ms")
   }
 
+  //собственно стратегия
   override def move(self: Hockeyist, world: World, game: Game, move: Move): Unit = measure("move") {
-    //if (self.y == 460) return
 
+    //заполняем глобальные переменные для быстрого доступа
     WorldEx(world, game, self)
+    //перераспределяем роли
     Trainer(world, game)
+    //логируем предыдущий ход
     Logger.doLog(world)
+    //всякая отладка
     world.hockeyists.foreach(h => {
       Physics.timeToArrivalForStick(h, world.puck, true)
     })
+    //действуем
     if (self.state != Resting)
       self.role.move(self, world, game, move)
 
-    /*
-    1. скорости хокеиста и шайбы складываются. выгоднее лупить по ходу движения. например отрикошетив от борта. иначе - замах. можно рассчитать
-          20*power + speed*cos(angle_look - angle_direction)
-    5. зажимание в угол
-     */
-
-  //}
+  //охранное условие - чтобы не заклиниться в swinging
   if (self.state == Swinging && (!Seq(Strike, Swing, CancelStrike, ActionType.None).contains(move.action) || move.speedUp != 0 || move.turn != 0)) {
     move.action = CancelStrike
   }

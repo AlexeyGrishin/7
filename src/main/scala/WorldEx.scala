@@ -4,9 +4,11 @@ import StrictMath._
 import scala.collection
 import scala.collection.parallel.mutable
 
+//всякие вспомогательные штуки, глобальное состояние и пр
 object WorldEx {
   import Geometry._
 
+  //сохраняется для быстрого доступа. да,да,да,глобальные переменные - плохо. отвалите :)
   var world: World = null
   var game: Game = null
 
@@ -28,6 +30,7 @@ object WorldEx {
     //if (this.h == null || this.h.id == h.id) this.h = h
   }
 
+  //опасные зоны для скоростей от 15 до 26
   lazy val dangersBySpeed: Map[Int, Array[Point]] = (15 to 26).map(
     s => s -> DangerArea.calculatePoints(world, game, puckSpeed = s)
   ).toMap
@@ -46,6 +49,7 @@ object WorldEx {
 
   val goalieR = 30.0
 
+  //все точки/зоны для левой и правой части
   lazy val leftZone = new PlayerZone(
     new Rectangle(new Point(0, 0), new Point(Geometry.middleX, Geometry.height)),
     dangersBySpeed.map(
@@ -111,9 +115,11 @@ object WorldEx {
   }
   lazy val weOnRight = world.myPlayer.get.netRight > Geometry.middleX
 
+  //с учетом положения выясняем где наша зона, а где вражеская
   lazy val myZone = if (weOnRight) rightZone else leftZone
   lazy val enemyZone = if (!weOnRight) rightZone else leftZone
 
+  //это особая скалашная магия - неявные преобразования
   implicit def unit2point(unit: ModelUnit): Point = new Point(unit.x, unit.y)
   def look(unit: ModelUnit): Vector = new Vector(cos(unit.angle), sin(unit.angle))
   implicit def unit2velocityVector(unit: ModelUnit): Vector = new Vector(unit.speedX, unit.speedY)
@@ -124,6 +130,7 @@ object WorldEx {
     map.getOrElseUpdate(h.id, new HockeystEx(h)).update(h)
   }
 
+  //обертка-расширение для шайбы/хокеистов. юзается во всяких алгоритмах.
   class ModelUnitEx(m: ModelUnit) {
     def velocity = Math.hypot(m.speedX, m.speedY)
     def realSpeedup(backward: Boolean = false) = m match {
@@ -134,6 +141,7 @@ object WorldEx {
       case h: Hockeyist => if (h.lookVector.normal_*(velocityVector) > 0.8) realSpeedup() else 0.0
       case _ => 0.0
     }
+    //ну ты понел
     val brakeK = m match {
       case h: Hockeyist => 1.0 - 1.0 / 50
       case _ => 1.0 - 1.0 / 1000
@@ -145,6 +153,7 @@ object WorldEx {
     }
     def point = new Point(m.x,m.y)
 
+    //кто реально "везет" данный объект (т.е. чью скорость/направление надо учитывать). для шайбы которую тащит хокеист - хокеист. для шайбы без хокеиста - шайба. для хокеиста - он сам.
     def realActor: ModelUnitEx = m match {
       case p: Puck if p.ownerHockeyistId.isDefined => u2ex(world.hockeyists.find(_.ownPuck).get)
       case _ => this

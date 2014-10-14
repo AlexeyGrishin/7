@@ -2,6 +2,11 @@ import Roles._
 import model.{Hockeyist, HockeyistType, World, Game}
 import WorldEx._
 
+//раздает роли в зависимости от состояния игры
+//состояние описывается всего 3мя значениями. что мало, конечно
+// - кто держит шайбу (мы/они/никто) - основной критерий
+// - овертайм без вратарей или нет - без вратарей не мучаемся с атакой. включается за 300 тиков до овертайма
+// - время после гола - просто едут всех гасить :)
 object Trainer {
   val Enemy = -1
   val Noone = 0
@@ -39,6 +44,7 @@ object Trainer {
     //withoutPuck.role = /*if (world.tick < 500) Roles.FoolingAround else*/ DoDefence
   }
 
+  //для 2х хокеистов. 1 всегда защищает, 2й всегда нападает
   def reassignRoles2(world: World, game: Game): Unit = {
     val our = world.hockeyists.filter(_.isMoveableOur).toList
     val List(withPuck, withoutPuck) = our.sortBy(h => if (h.ownPuck) 1 else 2)
@@ -67,20 +73,24 @@ object Trainer {
     }
   }
 
+  //для шестерых - рандом, заглушка, чтобы стратегию принимали. не доделывал.
   def reassignRoles6(world: World, game: Game): Unit = {
     val all = world.hockeyists.filter(h => h.isMoveableOur).toList
     val List(attacker, defencer, helper) = all
     reassignRoles36(world, game, attacker, defencer, helper)
   }
 
+  //для трех - защитник напдает, форвард защищает, третий на подхвате.
+  //почему так: у защитника больше выносливость - сложнее отлупить клюшкой. скорость и меткость схожи. сила меньше, но
+  //если смог разогнаться, то сила уже не роляет
   def reassignRoles3(world: World, game: Game): Unit = {
-    //TODO: switch attacker<->defencer
     val defencer = world.hockeyists.find(h => h.isOur && h.hockeyistType == HockeyistType.Forward).get
     val attacker = world.hockeyists.find(h => h.isOur && h.hockeyistType == HockeyistType.Defenceman).get
     val helper = world.hockeyists.find(h => h.isOur && h.hockeyistType == HockeyistType.Versatile).get
     reassignRoles36(world, game, attacker, defencer, helper)
   }
 
+  //опять же 1 защищает, 1 забивает, и 1 на подхвате
   def reassignRoles36(world: World, game: Game, attacker: Hockeyist, defencer: Hockeyist, helper: Hockeyist): Unit = {
     val withPuck = world.hockeyists.find(h => h.isOur && h.ownPuck)
     val withoutPuck = world.hockeyists.filter(h => h.isOur && !h.ownPuck)
